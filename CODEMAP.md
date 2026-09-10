@@ -28,7 +28,7 @@ Search: `@main|TimelineView|ThoughtStore|confirmationDialog`
 
 ## Thought Domain
 
-- `ThoughtCore/Thought.swift` — 原文、Persona、AI Persona設定、AI投稿preview／生成use case、メンションmodelとrepository境界。
+- `ThoughtCore/Thought.swift` — 原文、SNS型アカウントプロフィール、AI接続、AI投稿／メンション返信preview・生成use case、repository境界。
 - `ThoughtCore/ThoughtDraft.swift` — 140文字、trim、validation。
 - `ThoughtCore/ThoughtTimeline.swift` — 投稿、降順表示、soft delete use case。
 - `ThoughtCore/ThoughtRelation.swift` — Relationモデル、repository／原子的Continuation境界、History取得use case。
@@ -40,7 +40,7 @@ Search: `ThoughtDraft|post|delete|deletedAt`
 ## Persistence
 
 - `ThoughtCore/ThoughtRepository.swift` — CRUD・本文検索・日付範囲repository境界、今日／昨日／直近日数／今週／今月／指定日のReview期間計算、テスト用メモリ実装。
-- `ThoughtCore/SQLiteThoughtRepository.swift` — SQLite schema v8、Persona／投稿者／AI設定・生成来歴／メンション、本文検索／タグ／期間＋単一タグ／日付範囲／分析集計／Relation件数／期間要約query、Continuation transaction、旧JSON migration／2世代backup。
+- `ThoughtCore/SQLiteThoughtRepository.swift` — SQLite schema v11、アカウント／AI接続／投稿者／AI設定・生成来歴／メンション、AI返信Continuation transaction、本文検索／タグ／分析、旧JSON migration／2世代backup。
 - `ThoughtCore/ReviewSummary.swift` — AI要約model、immutable送信preview、通信／transport／保存protocol、中央provider／model設定、typed service error、対象準備／鮮度検証／生成・保存use case、Mock client。
 - `ThoughtCore/DailySummary.swift` — 構造化model、prompt、preview、準備／生成use case、1日1件のrepository境界。
 - `ThoughtCore/ReviewSummaryExporter.swift` — 旧期間要約の互換コード。現在のUIからは利用せず、既存データを壊さないため保持する。

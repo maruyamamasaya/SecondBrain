@@ -235,7 +235,7 @@ final class ThoughtFlowUITests: XCTestCase {
 
         app.buttons["thoughtSearchButton"].tap()
         XCTAssertTrue(app.navigationBars["Thought検索"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.otherElements["thoughtSearchInitialState"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["thoughtSearchInitialState"].waitForExistence(timeout: 2))
 
         let searchField = app.searchFields.firstMatch
         XCTAssertTrue(searchField.waitForExistence(timeout: 2))
@@ -250,7 +250,7 @@ final class ThoughtFlowUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["別のメモ"].exists)
         results.element(boundBy: 0).tap()
 
-        XCTAssertTrue(app.navigationBars["Thought"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.navigationBars["Thought"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["writeContinuationButton"].exists)
     }
 

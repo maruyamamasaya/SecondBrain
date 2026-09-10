@@ -287,7 +287,7 @@ struct ThoughtTagTests {
         try fixture.writeV3Database(thought: original)
 
         let repository = try fixture.repository()
-        #expect(SQLiteThoughtRepository.schemaVersion == 8)
+        #expect(SQLiteThoughtRepository.schemaVersion == 11)
         #expect(try repository.fetchByID(original.id) == original)
         guard case .added(let tag) = try repository.addTag(named: "移行後", to: original.id) else { return }
         #expect(try repository.fetchTags(for: original.id) == [tag])
@@ -427,7 +427,7 @@ struct ThoughtHistoryTests {
         try fixture.writeV1Database(thought: original)
 
         let repository = try fixture.repository()
-        #expect(SQLiteThoughtRepository.schemaVersion == 8)
+        #expect(SQLiteThoughtRepository.schemaVersion == 11)
         #expect(try repository.fetchAll() == [original])
         #expect(try repository.fetchBySourceThoughtID(original.id).isEmpty)
     }
@@ -1076,7 +1076,7 @@ struct ExternalBackupTests {
         #expect(analytics.dailyCounts.first?.count == 1)
         #expect(analytics.dailyCounts.last?.count == 2)
         #expect(try repository.fetchAll() == before)
-        #expect(SQLiteThoughtRepository.schemaVersion == 8)
+        #expect(SQLiteThoughtRepository.schemaVersion == 11)
     }
 
     @Test func emptyLocalAnalyticsReturnsZeroFilledDistributions() throws {
@@ -1203,6 +1203,14 @@ struct ExternalBackupTests {
 
 @Suite("Personas", .serialized)
 struct PersonaTests {
+    @Test func validatesSNSAccountIdentifiersAndNicknames() throws {
+        #expect(try PersonaProfile.accountID(from: " @Vespera_AI ") == "vespera_ai")
+        #expect(throws: PersonaProfileValidationError.reservedAccountID) { try PersonaProfile.accountID(from: "system") }
+        #expect(throws: PersonaProfileValidationError.invalidAccountID) { try PersonaProfile.accountID(from: "日本語") }
+        #expect(try PersonaProfile.nickname(from: " ベス 🌙 ") == "ベス 🌙")
+        #expect(PersonaProfile.biography(from: String(repeating: "a", count: 161)) == nil)
+    }
+
     @Test func existingAndNewThoughtsUseDefaultHumanAndProfilePersists() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -1288,6 +1296,28 @@ struct PersonaTests {
         let invalid = Thought(body: "無効なメンション")
         #expect(throws: SQLiteThoughtRepositoryError.self) { try repository.create(invalid, authorPersonaID: Persona.defaultHumanID, mentionedPersonaID: UUID()) }
         #expect(try repository.fetchByID(invalid.id) == nil)
+    }
+
+    @Test func aiConnectionIsIndependentAndReplyIsAtomicAndIdempotent() async throws {
+        let fixture = try Fixture(); defer { fixture.remove() }
+        let repository = try fixture.repository()
+        let connections = try repository.fetchAIConnections()
+        #expect(connections.count == 1)
+        var connection = try #require(connections.first)
+        connection.model = "gemini-test"
+        try repository.saveAIConnection(connection)
+
+        let ai = Persona(displayName: "ベス", accountID: "vespera", biography: "思考の相棒", kind: .ai)
+        let configuration = AIPersonaConfiguration(personaID: ai.id, role: "整理", instructions: "短く", connectionID: connection.id)
+        try repository.createAIPersona(ai, configuration: configuration)
+        let parent = Thought(body: "今日は何から始めよう")
+        try repository.create(parent, authorPersonaID: Persona.defaultHumanID, mentionedPersonaID: ai.id)
+        let preview = try AIReplyPreview(id: UUID(), target: parent, context: [parent], persona: ai, configuration: configuration)
+        let reply = try await GenerateAIReply(client: MockReviewSummaryClient(text: "一番小さな作業から始めよう。"), repository: repository)(preview: preview)
+        #expect(try repository.fetchPersona(for: reply.id)?.id == ai.id)
+        #expect(try repository.fetchContinuationSource(for: reply.id)?.targetThoughtID == parent.id)
+        await #expect(throws: (any Error).self) { try await GenerateAIReply(client: MockReviewSummaryClient(text: "重複"), repository: repository)(preview: preview) }
+        #expect(try repository.fetchContinuations(of: parent.id).count == 1)
     }
 }
 

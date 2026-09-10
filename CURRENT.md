@@ -8,9 +8,14 @@
 
 ## 現在のフェーズ
 
-Phase 3-D（ローカル分析 v1）までコード実装済みです。2026-09-09にMac/Xcode 26.6でSwift Testing全60件、Firebase 12.18.0を含むDebug／Release Simulator build、Personal TeamのDebug実機向け署名buildを確認しました。XCUITest targetはcompile済みですが、Simulator serviceが起動時に停止するホスト環境障害のため実行確認は未完了です。
+Phase 3-DとAIアカウントPhase A〜Cまでコード実装済みです。2026-09-11にSwift Testing全71件、Firebase 12.18.0を含むDebug Simulator build、iPhone SE SimulatorのXCUITest全14件を確認しました。
 
 ## 実装済み
+
+- ローカルSNS型アカウント。内部UUIDを維持しながら、ユーザー入力の一意な`@accountID`、自由なニックネーム、自己紹介を自分とAIへ設定し、Timelineで併記する。
+- SQLite schema v9のプロフィールmigration。既存humanへ`owner`、既存AIへ決定的なIDを補完し、Thought投稿者・メンション・生成来歴を変更しない。
+- SQLite schema v10の`ai_connections`。AI人格とprovider／model／有効状態を分離し、既存Firebase AI Logic接続を既定値として移行する。
+- メンション投稿後の明示確認、最終payload preview、AI名義Continuation返信。schema v11のrequest ID一意制約とThought・author・Relation・生成来歴のatomic保存で二重返信と部分保存を防ぐ。
 
 - Timelineトップ右上の歯車から開く設定画面。プロフィール／AI Persona、Markdown／JSON Export、外部バックアップを設定内へ集約し、トップの主要導線と分離する。
 - ローカルの単一人間Persona基盤。SQLite schema v6の`personas`／`thought_authors`で既存・新規Thoughtを固定のデフォルト人間へ紐づけ、表示名と512px以下へ正方形化したJPEGアイコンをSQLite内へ保存する。
@@ -116,6 +121,10 @@ Phase 3-D（ローカル分析 v1）までコード実装済みです。2026-09-
 - Phase 3-DのSwift Testing、SQLite集計SQL、timezone／時間帯境界、分析画面XCUITest、小型iPhoneでのバー表示、Dynamic Type／Dark Mode／VoiceOverはWindows環境のため未実行です。
 
 ## 次に行うこと
+
+### AIアカウント Phase A〜C
+
+`decisions/0007-local-ai-accounts-roadmap.md`に基づくコード実装とCore／Simulator build確認まで完了。次はSimulator XCUITest、実機でのプロフィール編集・Firebase Debug返信、Release App Attest通信を確認する。自発投稿やAI同士の自動会話は行わない。
 
 ### Xcode環境が利用可能になったら行う検証
 

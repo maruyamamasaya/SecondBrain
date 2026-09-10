@@ -16,9 +16,7 @@ struct TimelineView: View {
                         emptyState
                     } else {
                         ForEach(store.thoughts) { thought in
-                            ThoughtRow(thought: thought, persona: store.personasByThoughtID[thought.id] ?? store.defaultHumanPersona, mentionedPersona: store.mentionedPersonasByThoughtID[thought.id], tags: store.tagsByThoughtID[thought.id] ?? []) {
-                                store.requestDeletion(of: thought)
-                            }
+                            ThoughtRow(thought: thought, persona: store.personasByThoughtID[thought.id] ?? store.defaultHumanPersona, mentionedPersona: store.mentionedPersonasByThoughtID[thought.id], tags: store.tagsByThoughtID[thought.id] ?? [], onRequestReply: { store.requestAIReply(to: thought) }) { store.requestDeletion(of: thought) }
                             if thought.id != store.thoughts.last?.id {
                                 Divider().padding(.leading, 16)
                             }
@@ -90,6 +88,11 @@ struct TimelineView: View {
                 ShareSheet(url: artifact.url, onFailure: store.sharingFailed)
             }
             .sheet(isPresented: $showsSettings) { SettingsView(store: store) }
+            .sheet(item: $store.aiReplyPreview) { AIReplyPreviewView(store: store, preview: $0) }
+            .confirmationDialog("AIに返信を依頼しますか？", isPresented: Binding(get: { store.pendingAIReplyTarget != nil }, set: { if !$0 { store.dismissAIReplyRequest() } }), titleVisibility: .visible) {
+                Button("送信内容を確認") { store.prepareAIReply() }
+                Button("あとで", role: .cancel) { store.dismissAIReplyRequest() }
+            } message: { Text("Thoughtはすでに保存されています。確認するまでAI通信は行いません。") }
             .confirmationDialog(
                 "このThoughtを削除しますか？",
                 isPresented: deletionDialogIsPresented,
@@ -114,11 +117,11 @@ struct TimelineView: View {
         HStack(alignment: .center, spacing: 8) {
             Menu {
                 ForEach(store.personas.filter { $0.kind == .ai }) { persona in
-                    Button("@\(persona.displayName)") { store.selectedMentionPersona = persona }
+                    Button("@\(persona.accountID)") { store.selectedMentionPersona = persona }
                 }
                 if store.selectedMentionPersona != nil { Button("メンションを外す", role: .destructive) { store.selectedMentionPersona = nil } }
             } label: {
-                Text(store.selectedMentionPersona.map { "@\($0.displayName)" } ?? "@")
+                Text(store.selectedMentionPersona.map { "@\($0.accountID)" } ?? "@")
                     .font(.subheadline.weight(.semibold)).lineLimit(1)
             }
             .disabled(store.personas.allSatisfy { $0.kind != .ai })
@@ -388,7 +391,9 @@ private struct ThoughtSearchView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(store.searchResults) { thought in
                             VStack(alignment: .leading, spacing: 8) {
-                                NavigationLink(value: thought.id) {
+                                NavigationLink {
+                                    ThoughtDetailView(store: store, initialThoughtID: thought.id)
+                                } label: {
                                     VStack(alignment: .leading, spacing: 8) {
                                     Text(thought.body)
                                         .font(.body)
@@ -794,6 +799,7 @@ private struct ThoughtRow: View {
     let persona: Persona
     let mentionedPersona: Persona?
     let tags: [ThoughtTag]
+    let onRequestReply: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -803,8 +809,8 @@ private struct ThoughtRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 NavigationLink(value: thought.id) {
                     VStack(alignment: .leading, spacing: 8) {
-                    Text(persona.displayName)
-                        .font(.subheadline.weight(.semibold))
+                    Text(persona.displayName).font(.subheadline.weight(.semibold))
+                    if !persona.accountID.isEmpty { Text("@\(persona.accountID)").font(.caption).foregroundStyle(.secondary) }
                     if persona.kind == .ai {
                         Text("AI").font(.caption2.weight(.bold)).foregroundStyle(.tint)
                     }
@@ -826,7 +832,7 @@ private struct ThoughtRow: View {
                 .accessibilityIdentifier("timelineThought_\(thought.id.uuidString)")
                 TagStrip(tags: tags)
                 if let mentionedPersona {
-                    Text("@\(mentionedPersona.displayName)")
+                    Text("@\(mentionedPersona.accountID)")
                         .font(.caption.weight(.semibold)).foregroundStyle(.tint)
                         .accessibilityLabel("\(mentionedPersona.displayName)をメンション")
                 }
@@ -834,6 +840,7 @@ private struct ThoughtRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Menu {
+                if mentionedPersona != nil { Button("このAIに返信を依頼", action: onRequestReply) }
                 Button("削除", role: .destructive, action: onDelete)
             } label: {
                 Image(systemName: "ellipsis")
@@ -877,24 +884,30 @@ private struct PersonaManagementView: View {
     @State private var showsNewAIEditor = false
     @State private var editingAI: Persona?
     @State private var postingAI: Persona?
+    @State private var editingConnection: AIConnection?
 
     var body: some View {
         NavigationStack {
             List {
                 Section("あなた") {
                     Button { showsHumanEditor = true } label: { personaRow(store.defaultHumanPersona) }.buttonStyle(.plain)
+                    NavigationLink("自分の投稿を見る") { AccountProfileView(store: store, persona: store.defaultHumanPersona) }
                 }
                 Section("AI Personas") {
                     ForEach(store.personas.filter { $0.kind == .ai }) { persona in
                         VStack(alignment: .leading, spacing: 8) {
                             Button { editingAI = persona } label: { personaRow(persona) }.buttonStyle(.plain)
+                            NavigationLink("プロフィールと投稿") { AccountProfileView(store: store, persona: persona) }
                             Button("このAIに投稿を依頼") { postingAI = persona }.buttonStyle(.bordered)
                         }.padding(.vertical, 4)
                     }
                     Button { showsNewAIEditor = true } label: { Label("AI Personaを追加", systemImage: "plus.circle") }
                         .accessibilityIdentifier("addAIPersonaButton")
                 }
-                Section { Text("AI Personaは投稿者の土台です。この段階ではAI通信や自動投稿は行いません。").font(.footnote).foregroundStyle(.secondary) }
+                Section("AIサービス") {
+                    ForEach(store.aiConnections) { connection in Button { editingConnection = connection } label: { VStack(alignment: .leading) { Text(connection.label); Text("\(connection.provider) · \(connection.model) · \(connection.isEnabled ? "有効" : "無効")").font(.caption).foregroundStyle(.secondary) } } }
+                }
+                Section { Text("AI通信は投稿依頼またはメンション返信を確認した後だけ行われます。").font(.footnote).foregroundStyle(.secondary) }
             }
             .navigationTitle("Personas")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
@@ -902,15 +915,59 @@ private struct PersonaManagementView: View {
             .sheet(isPresented: $showsNewAIEditor) { AIPersonaEditorView(store: store, persona: nil) }
             .sheet(item: $editingAI) { AIPersonaEditorView(store: store, persona: $0) }
             .sheet(item: $postingAI) { AIPostRequestView(store: store, persona: $0) }
+            .sheet(item: $editingConnection) { AIConnectionEditorView(store: store, connection: $0) }
         }
     }
 
     private func personaRow(_ persona: Persona) -> some View {
         HStack(spacing: 12) {
             PersonaIcon(persona: persona, size: 44)
-            VStack(alignment: .leading) { Text(persona.displayName).foregroundStyle(.primary); Text(persona.kind == .human ? "人間" : "AI").font(.caption).foregroundStyle(.secondary) }
+            VStack(alignment: .leading) { Text(persona.displayName).foregroundStyle(.primary); Text("@\(persona.accountID) · \(persona.kind == .human ? "人間" : "AI")").font(.caption).foregroundStyle(.secondary) }
             Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
         }.contentShape(Rectangle())
+    }
+}
+
+private struct AccountProfileView: View {
+    @ObservedObject var store: ThoughtStore
+    let persona: Persona
+    private var authoredThoughts: [Thought] { store.thoughts(authoredBy: persona.id) }
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 12) { PersonaIcon(persona: persona, size: 64); VStack(alignment: .leading) { Text(persona.displayName).font(.title3.bold()); Text("@\(persona.accountID)").foregroundStyle(.secondary); if persona.kind == .ai { Text("AIアカウント").font(.caption.bold()).foregroundStyle(.tint) } } }
+                if !persona.biography.isEmpty { Text(persona.biography) }
+            }
+            Section("投稿") {
+                if authoredThoughts.isEmpty { Text("まだ投稿がありません").foregroundStyle(.secondary) }
+                ForEach(authoredThoughts) { thought in NavigationLink(value: thought.id) { VStack(alignment: .leading) { Text(thought.body); Text(ThoughtDateText.string(for: thought.createdAt)).font(.caption).foregroundStyle(.secondary) } } }
+            }
+        }.navigationTitle("プロフィール")
+    }
+}
+
+private struct AIConnectionEditorView: View {
+    @ObservedObject var store: ThoughtStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var connection: AIConnection
+    init(store: ThoughtStore, connection: AIConnection) { self.store = store; _connection = State(initialValue: connection) }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("接続") {
+                    TextField("設定名", text: $connection.label)
+                    LabeledContent("サービス", value: connection.provider)
+                    TextField("モデル", text: $connection.model).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Toggle("有効", isOn: $connection.isEnabled)
+                }
+                Section { Text("認証情報はこのプロフィールには保存されません。Firebase構成とApp Checkはアプリ側で管理されます。").font(.footnote).foregroundStyle(.secondary) }
+            }
+            .navigationTitle("AIサービス")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("保存") { connection.updatedAt = Date(); if store.saveAIConnection(connection) { dismiss() } }.disabled(connection.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+            }
+        }
     }
 }
 
@@ -919,6 +976,8 @@ private struct AIPersonaEditorView: View {
     let persona: Persona?
     @Environment(\.dismiss) private var dismiss
     @State private var displayName: String
+    @State private var accountID: String
+    @State private var biography: String
     @State private var iconData: Data?
     @State private var selectedItem: PhotosPickerItem?
     @State private var role: String
@@ -927,6 +986,8 @@ private struct AIPersonaEditorView: View {
     init(store: ThoughtStore, persona: Persona?) {
         self.store = store; self.persona = persona
         _displayName = State(initialValue: persona?.displayName ?? "")
+        _accountID = State(initialValue: persona?.accountID ?? "")
+        _biography = State(initialValue: persona?.biography ?? "")
         _iconData = State(initialValue: persona?.iconData)
         let configuration = persona.flatMap { store.aiConfigurations[$0.id] }
         _role = State(initialValue: configuration?.role ?? "")
@@ -941,7 +1002,11 @@ private struct AIPersonaEditorView: View {
                     PhotosPicker(selection: $selectedItem, matching: .images) { Label("写真を選ぶ", systemImage: "photo") }
                     if iconData != nil { Button("アイコンを削除", role: .destructive) { iconData = nil } }
                 }
-                Section("表示名") { TextField("AI Persona名", text: $displayName) }
+                Section("プロフィール") {
+                    TextField("ニックネーム", text: $displayName)
+                    TextField("アカウントID", text: $accountID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("自己紹介", text: $biography, axis: .vertical).lineLimit(2...5)
+                }
                 Section("役割") { TextField("例：アイデアを広げる相棒", text: $role, axis: .vertical) }
                 Section("指示") { TextField("口調、視点、避けることなど", text: $instructions, axis: .vertical).lineLimit(3...8) }
                 if let persona { Section { Button("AI Personaを無効化", role: .destructive) { store.deactivateAIPersona(persona); dismiss() } } }
@@ -952,10 +1017,10 @@ private struct AIPersonaEditorView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        let saved = persona.map { store.updateAIPersona($0, displayName: displayName, iconData: iconData, role: role, instructions: instructions) }
-                            ?? store.createAIPersona(displayName: displayName, iconData: iconData, role: role, instructions: instructions)
+                        let saved = persona.map { store.updateAIPersona($0, displayName: displayName, accountID: accountID, biography: biography, iconData: iconData, role: role, instructions: instructions) }
+                            ?? store.createAIPersona(displayName: displayName, accountID: accountID, biography: biography, iconData: iconData, role: role, instructions: instructions)
                         if saved { dismiss() }
-                    }.disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || displayName.count > 40 || role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }.disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || biography.count > 160 || role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onChange(of: selectedItem) { item in
@@ -964,7 +1029,7 @@ private struct AIPersonaEditorView: View {
         }
     }
 
-    private var previewPersona: Persona { Persona(id: persona?.id ?? UUID(), displayName: displayName, kind: .ai, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg") }
+    private var previewPersona: Persona { Persona(id: persona?.id ?? UUID(), displayName: displayName, accountID: accountID, biography: biography, kind: .ai, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg") }
 }
 
 private struct AIPostRequestView: View {
@@ -1013,16 +1078,41 @@ private struct AIPostPreviewView: View {
     }
 }
 
+private struct AIReplyPreviewView: View {
+    @ObservedObject var store: ThoughtStore
+    let preview: AIReplyPreview
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("返信するAI") { Text("\(preview.persona.displayName)  @\(preview.persona.accountID)") }
+                Section("対象Thought") { Text(preview.target.body) }
+                Section("最終payload") { Text(preview.request.prompt).font(.caption).textSelection(.enabled) }
+                if let error = store.aiPostError { Section { Text(error).foregroundStyle(.red) } }
+            }
+            .navigationTitle("返信の送信前確認")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { store.aiReplyPreview = nil; dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(store.isGeneratingAIPost ? "生成中…" : "送信") { Task { await store.generateAIReply(from: preview); if store.aiPostError == nil { dismiss() } } }.disabled(store.isGeneratingAIPost) }
+            }
+        }
+    }
+}
+
 private struct ProfileEditorView: View {
     @ObservedObject var store: ThoughtStore
     @Environment(\.dismiss) private var dismiss
     @State private var displayName: String
+    @State private var accountID: String
+    @State private var biography: String
     @State private var iconData: Data?
     @State private var selectedItem: PhotosPickerItem?
 
     init(store: ThoughtStore) {
         self.store = store
         _displayName = State(initialValue: store.defaultHumanPersona.displayName)
+        _accountID = State(initialValue: store.defaultHumanPersona.accountID)
+        _biography = State(initialValue: store.defaultHumanPersona.biography)
         _iconData = State(initialValue: store.defaultHumanPersona.iconData)
     }
 
@@ -1034,7 +1124,11 @@ private struct ProfileEditorView: View {
                     PhotosPicker(selection: $selectedItem, matching: .images) { Label("写真を選ぶ", systemImage: "photo") }
                     if iconData != nil { Button("アイコンを削除", role: .destructive) { iconData = nil } }
                 }
-                Section("表示名") { TextField("自分", text: $displayName).textInputAutocapitalization(.never) }
+                Section("プロフィール") {
+                    TextField("ニックネーム", text: $displayName)
+                    TextField("アカウントID", text: $accountID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("自己紹介", text: $biography, axis: .vertical).lineLimit(2...5)
+                }
                 Section { Text("プロフィールは端末内だけに保存され、既存のThoughtにも同じ名前とアイコンが表示されます。").font(.footnote).foregroundStyle(.secondary) }
             }
             .navigationTitle("プロフィール")
@@ -1042,8 +1136,8 @@ private struct ProfileEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { if store.updateDefaultHumanPersona(displayName: displayName, iconData: iconData) { dismiss() } }
-                        .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || displayName.count > 40)
+                    Button("保存") { if store.updateDefaultHumanPersona(displayName: displayName, accountID: accountID, biography: biography, iconData: iconData) { dismiss() } }
+                        .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || displayName.count > 40 || biography.count > 160)
                 }
             }
             .onChange(of: selectedItem) { item in
@@ -1056,7 +1150,7 @@ private struct ProfileEditorView: View {
     }
 
     private var previewPersona: Persona {
-        Persona(id: store.defaultHumanPersona.id, displayName: displayName, kind: .human, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg")
+        Persona(id: store.defaultHumanPersona.id, displayName: displayName, accountID: accountID, biography: biography, kind: .human, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg")
     }
 }
 

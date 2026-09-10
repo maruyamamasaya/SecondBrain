@@ -10,15 +10,18 @@ final class ThoughtStore: ObservableObject {
 
     @Published var draft = ""
     @Published private(set) var thoughts: [Thought] = []
-    @Published private(set) var defaultHumanPersona = Persona(id: Persona.defaultHumanID, displayName: "自分", kind: .human)
+    @Published private(set) var defaultHumanPersona = Persona(id: Persona.defaultHumanID, displayName: "自分", accountID: "owner", kind: .human)
     @Published private(set) var personas: [Persona] = []
     @Published private(set) var personasByThoughtID: [UUID: Persona] = [:]
     @Published private(set) var mentionedPersonasByThoughtID: [UUID: Persona] = [:]
     @Published var selectedMentionPersona: Persona?
     @Published private(set) var aiConfigurations: [UUID: AIPersonaConfiguration] = [:]
+    @Published private(set) var aiConnections: [AIConnection] = []
     @Published var aiPostPreview: AIPostPreview?
     @Published private(set) var isGeneratingAIPost = false
     @Published var aiPostError: String?
+    @Published var pendingAIReplyTarget: Thought?
+    @Published var aiReplyPreview: AIReplyPreview?
     @Published private(set) var dailySummaries: [DailySummary] = []
     @Published private(set) var dailySummary: DailySummary?
     @Published private(set) var dailySummaryPreview: DailySummaryPreview?
@@ -81,7 +84,7 @@ final class ThoughtStore: ObservableObject {
             thoughts = timeline.thoughts
             if let personaRepository { defaultHumanPersona = try personaRepository.fetchDefaultHumanPersona() }
             if let personaRepository { personas = try personaRepository.fetchPersonas(includeInactive: false) }
-            if let aiPersonaRepository { aiConfigurations = try aiPersonaRepository.fetchAIConfigurations() }
+            if let aiPersonaRepository { aiConfigurations = try aiPersonaRepository.fetchAIConfigurations(); aiConnections = try aiPersonaRepository.fetchAIConnections() }
             dailySummaries = try dailySummaryRepository?.fetchDailySummaries(from: .distantPast, to: .distantFuture) ?? []
             if let sqliteRepository = repository as? SQLiteThoughtRepository {
                 backupManager = ExternalBackupManager(repository: sqliteRepository)
@@ -97,12 +100,15 @@ final class ThoughtStore: ObservableObject {
         if let startupError { errorMessage = startupError }
     }
 
-    func updateDefaultHumanPersona(displayName: String, iconData: Data?) -> Bool {
+    func updateDefaultHumanPersona(displayName: String, accountID: String, biography: String, iconData: Data?) -> Bool {
         guard let personaRepository else { errorMessage = "プロフィールを保存できませんでした。"; return false }
-        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 40 else { errorMessage = "表示名は1〜40文字で入力してください。"; return false }
+        let name: String, normalizedID: String
+        do { name = try PersonaProfile.nickname(from: displayName); normalizedID = try PersonaProfile.accountID(from: accountID) }
+        catch { errorMessage = error.localizedDescription; return false }
+        guard let biography = PersonaProfile.biography(from: biography) else { errorMessage = "自己紹介は160文字以内で入力してください。"; return false }
         var persona = defaultHumanPersona
         persona.displayName = name
+        persona.accountID = normalizedID; persona.biography = biography
         persona.iconData = iconData
         persona.iconMIMEType = iconData == nil ? nil : "image/jpeg"
         persona.updatedAt = Date()
@@ -118,23 +124,29 @@ final class ThoughtStore: ObservableObject {
         }
     }
 
-    func createAIPersona(displayName: String, iconData: Data?, role: String, instructions: String) -> Bool {
+    func createAIPersona(displayName: String, accountID: String, biography: String, iconData: Data?, role: String, instructions: String) -> Bool {
         guard let aiPersonaRepository else { errorMessage = "AI Personaを保存できませんでした。"; return false }
-        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name: String, normalizedID: String
+        do { name = try PersonaProfile.nickname(from: displayName); normalizedID = try PersonaProfile.accountID(from: accountID) }
+        catch { errorMessage = error.localizedDescription; return false }
+        guard let biography = PersonaProfile.biography(from: biography) else { errorMessage = "自己紹介は160文字以内で入力してください。"; return false }
         let role = role.trimmingCharacters(in: .whitespacesAndNewlines), instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 40, !role.isEmpty, !instructions.isEmpty else { errorMessage = "表示名・役割・指示を入力してください。"; return false }
-        let persona = Persona(displayName: name, kind: .ai, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg")
-        do { try aiPersonaRepository.createAIPersona(persona, configuration: AIPersonaConfiguration(personaID: persona.id, role: role, instructions: instructions)); loadPersonas(); loadAIConfigurations(); return true }
+        guard !role.isEmpty, !instructions.isEmpty else { errorMessage = "役割・指示を入力してください。"; return false }
+        let persona = Persona(displayName: name, accountID: normalizedID, biography: biography, kind: .ai, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg")
+        do { try aiPersonaRepository.createAIPersona(persona, configuration: AIPersonaConfiguration(personaID: persona.id, role: role, instructions: instructions, connectionID: aiConnections.first(where: { $0.isEnabled })?.id)); loadPersonas(); loadAIConfigurations(); return true }
         catch { errorMessage = "AI Personaを保存できませんでした。"; return false }
     }
 
-    func updateAIPersona(_ original: Persona, displayName: String, iconData: Data?, role: String, instructions: String) -> Bool {
+    func updateAIPersona(_ original: Persona, displayName: String, accountID: String, biography: String, iconData: Data?, role: String, instructions: String) -> Bool {
         guard original.kind == .ai, let personaRepository, let aiPersonaRepository else { return false }
-        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name: String, normalizedID: String
+        do { name = try PersonaProfile.nickname(from: displayName); normalizedID = try PersonaProfile.accountID(from: accountID) }
+        catch { errorMessage = error.localizedDescription; return false }
+        guard let biography = PersonaProfile.biography(from: biography) else { errorMessage = "自己紹介は160文字以内で入力してください。"; return false }
         let role = role.trimmingCharacters(in: .whitespacesAndNewlines), instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 40, !role.isEmpty, !instructions.isEmpty else { errorMessage = "表示名・役割・指示を入力してください。"; return false }
-        var persona = original; persona.displayName = name; persona.iconData = iconData; persona.iconMIMEType = iconData == nil ? nil : "image/jpeg"; persona.updatedAt = Date()
-        do { try personaRepository.updatePersona(persona); try aiPersonaRepository.saveAIConfiguration(AIPersonaConfiguration(personaID: persona.id, role: role, instructions: instructions)); loadPersonas(); loadAIConfigurations(); refreshAuthors(for: thoughts.map(\.id)); return true }
+        guard !role.isEmpty, !instructions.isEmpty else { errorMessage = "役割・指示を入力してください。"; return false }
+        var persona = original; persona.displayName = name; persona.accountID = normalizedID; persona.biography = biography; persona.iconData = iconData; persona.iconMIMEType = iconData == nil ? nil : "image/jpeg"; persona.updatedAt = Date()
+        do { try personaRepository.updatePersona(persona); try aiPersonaRepository.saveAIConfiguration(AIPersonaConfiguration(personaID: persona.id, role: role, instructions: instructions, connectionID: aiConfigurations[persona.id]?.connectionID)); loadPersonas(); loadAIConfigurations(); refreshAuthors(for: thoughts.map(\.id)); return true }
         catch { errorMessage = "AI Personaを保存できませんでした。"; return false }
     }
 
@@ -149,6 +161,12 @@ final class ThoughtStore: ObservableObject {
         catch { errorMessage = "Personaを読み込めませんでした。" }
     }
     private func loadAIConfigurations() { aiConfigurations = (try? aiPersonaRepository?.fetchAIConfigurations()) ?? [:] }
+
+    func saveAIConnection(_ connection: AIConnection) -> Bool {
+        guard let aiPersonaRepository else { return false }
+        do { try aiPersonaRepository.saveAIConnection(connection); aiConnections = try aiPersonaRepository.fetchAIConnections(); return true }
+        catch { errorMessage = "AIサービス設定を保存できませんでした。"; return false }
+    }
 
     func prepareAIPost(persona: Persona, userRequest: String) {
         guard let configuration = aiConfigurations[persona.id] else { aiPostError = AIPostError.missingConfiguration.localizedDescription; return }
@@ -166,6 +184,33 @@ final class ThoughtStore: ObservableObject {
             timeline = try ThoughtTimeline(repository: thoughtRepository); thoughts = timeline?.thoughts ?? []
             refreshTags(for: thoughts.map(\.id)); refreshAuthors(for: thoughts.map(\.id)); aiPostPreview = nil
         } catch { aiPostError = error.localizedDescription }
+    }
+
+    func prepareAIReply() {
+        guard let target = pendingAIReplyTarget, let persona = mentionedPersonasByThoughtID[target.id], let configuration = aiConfigurations[persona.id] else { aiPostError = "返信対象を準備できませんでした。"; return }
+        do { aiReplyPreview = try AIReplyPreview(target: target, context: [target], persona: persona, configuration: configuration); pendingAIReplyTarget = nil; aiPostError = nil }
+        catch { aiPostError = error.localizedDescription }
+    }
+
+    func dismissAIReplyRequest() { pendingAIReplyTarget = nil }
+    func requestAIReply(to thought: Thought) { guard mentionedPersonasByThoughtID[thought.id] != nil else { return }; pendingAIReplyTarget = thought }
+
+    func thoughts(authoredBy personaID: UUID) -> [Thought] {
+        do { return try personaRepository?.fetchThoughts(authoredBy: personaID) ?? [] }
+        catch { errorMessage = "アカウントの投稿を読み込めませんでした。"; return [] }
+    }
+
+    func generateAIReply(from preview: AIReplyPreview) async {
+        guard let aiPersonaRepository, let thoughtRepository else { aiPostError = "AI返信の保存先を利用できません。"; return }
+        isGeneratingAIPost = true; aiPostError = nil; defer { isGeneratingAIPost = false }
+        do {
+            guard try thoughtRepository.fetchByID(preview.target.id) == preview.target,
+                  aiConfigurations[preview.persona.id] == preview.configuration else { throw ReviewSummaryError.stalePreview }
+            _ = try await GenerateAIReply(client: summaryClient, repository: aiPersonaRepository)(preview: preview)
+            timeline = try ThoughtTimeline(repository: thoughtRepository); thoughts = timeline?.thoughts ?? []
+            refreshAuthors(for: thoughts.map(\.id)); refreshMentions(for: thoughts.map(\.id)); aiReplyPreview = nil
+        } catch ReviewSummaryError.stalePreview { aiPostError = "確認後に対象またはAI設定が変更されたため送信しませんでした。" }
+        catch { aiPostError = error.localizedDescription }
     }
 
     private func refreshAuthors(for ids: [UUID]) {
@@ -419,8 +464,10 @@ final class ThoughtStore: ObservableObject {
         do {
             if let persona {
                 guard let mentionRepository, let validBody = ThoughtDraft.validBody(from: body) else { return false }
-                try mentionRepository.create(Thought(body: validBody), authorPersonaID: Persona.defaultHumanID, mentionedPersonaID: persona.id)
+                let thought = Thought(body: validBody)
+                try mentionRepository.create(thought, authorPersonaID: Persona.defaultHumanID, mentionedPersonaID: persona.id)
                 timeline = try ThoughtTimeline(repository: thoughtRepository)
+                pendingAIReplyTarget = thought
             } else {
                 guard try timeline.post(body) != nil else { return false }
             }

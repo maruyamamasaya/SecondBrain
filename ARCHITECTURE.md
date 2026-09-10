@@ -41,7 +41,8 @@ SwiftUI AppRoute -> TimelineView / QuickCaptureView
 - `ThoughtStore`: Timeline／本文検索／タグ／Continuation draftとHistory画面状態を各use caseへ接続。
 - `ThoughtTimeline`: 投稿validation、日時降順sort、soft delete、保存の調停。
 - `Thought` / `ThoughtDraft`: 原文モデルと140文字ルール。
-- `Persona` / `PersonaRepository` / `AuthoredThoughtRepository`: 人間／AIに共通する投稿者モデル、複数Personaの管理、任意Persona IDとThoughtを同一transactionで保存する境界。固定IDの人間Personaは無効化できない。
+- `Persona` / `PersonaRepository` / `AuthoredThoughtRepository`: 不変UUID、公開用`@accountID`、ニックネーム、自己紹介を持つ人間／AI共通アカウント。固定IDの人間は無効化できず、追加アカウントはAIだけとする。
+- `AIConnection`: AI人格から分離したprovider／model／有効状態。生成記録は実行時のprovider／modelをsnapshotとして保持する。
 - `AIPersonaConfiguration` / `GenerateAIPost`: Personaごとの役割・指示、ユーザー依頼からimmutableな送信前previewを作り、明示確定後の応答だけをAI名義で投稿する。140文字を超える応答や空応答は保存しない。
 - `ThoughtMention` / `ThoughtMentionRepository`: Thought本文の文字列解析ではなく、ThoughtとAI Persona IDの単一メンション関連をatomic保存・一括取得する。メンション作成自体はAI clientを呼ばない。
 - `ThoughtRepository`: create、Timeline query、literal部分一致検索、日付範囲query、ID取得、全件取得、soft deleteの保存境界。
@@ -51,7 +52,7 @@ SwiftUI AppRoute -> TimelineView / QuickCaptureView
 - `ThoughtRelationRepository`: Relation作成、source／target方向の1ステップ取得境界。
 - `ThoughtContinuationRepository`: 新規Thoughtと`continues` Relationを同一transactionで作成する境界。
 - `ThoughtHistory`: 現在Thoughtからrootを求め、Relation APIだけで分岐を安定順に取得するuse case。
-- `SQLiteThoughtRepository`: schema v8、Thought／Persona／Mention／Tag／Relation／AI生成情報／Daily Summary query、旧JSON importと2世代backupを所有する正本実装。旧期間要約tableは既存データ互換のため維持する。
+- `SQLiteThoughtRepository`: schema v11、Thought／Account／AIConnection／Mention／Tag／Relation／AI生成情報／Daily Summary query、旧JSON importと2世代backupを所有する正本実装。旧期間要約tableは既存データ互換のため維持する。
 - `ThoughtExporter`: Repositoryから未削除Thoughtを取得し、Markdown／JSONを生成。
 - `ShareSheet`: ExportファイルをiOS標準共有UIへ渡すUIKit bridge。
 - `ExternalBackupManager`: Filesフォルダpicker、security-scoped bookmark、バックアップ状態と確認UIのpresentation境界。
@@ -80,7 +81,7 @@ Daily Summaryは構造化された要約結果をThought原文と分離して1�
 
 ## Persistence
 
-schema v8の`personas`と`thought_authors`は既存Thoughtを固定のデフォルト人間Personaへ移行し、新規Thought／Continuationの作成と投稿者関連を同一transactionで保存します。`ai_persona_configurations`と`ai_post_generations`は役割・指示とAI生成来歴を本文から分離し、`thought_mentions`は投稿とAI Personaの関連を保存します。プロフィール画像は最大512pxへ正方形化したJPEGのBLOBとして保存され、SQLite snapshotとRestoreに含まれます。
+schema v11の`personas`と`thought_authors`は内部UUIDと公開用account IDを分離し、新規Thought／Continuationの作成と投稿者関連を同一transactionで保存します。`ai_connections`は人格とサービス設定を分離します。`ai_persona_configurations`と`ai_post_generations`は役割・指示とAI生成来歴を本文から分離し、`thought_mentions`は投稿とAIアカウントの関連を保存します。AI返信はrequest IDで重複を防ぎ、Thought・投稿者・Continuation Relation・生成来歴を一括保存します。
 
 Widget Extensionは永続化層をリンクせず、固定表示とQuick Capture URLだけを持ちます。App Group、共有container、SQLite path変更はなく、既存appだけがApplication Support内の正本DBを読み書きします。
 
