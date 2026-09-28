@@ -8,12 +8,12 @@
 
 ## 現在のフェーズ
 
-Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v1までコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。その後追加した週間振り返りv1と日記のDraft／active二重表示修正は、2026-09-14のMac/Xcode 26.6検証で`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorによりtest／buildへ到達できていません。Apps / Tools Hub追加分もWindows実装のため未compileです。
+Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v1までコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。週間振り返りv1と日記のDraft／active二重表示修正で発生した`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorは2026-09-18に修正し、Debug実機buildとVesperaへの上書き導入・起動を確認しました。Apps / Tools Hub追加分はWindows実装のため未compileです。
 
-### 現在の検証blocker
+### 現在の検証状況
 
-- `ExternalBrainCache.journalEntries()`内の`compactMap`で要素型を推論できず、Swift 6.3 compileが失敗する。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了。
-- 最新の検証手順と記録は`MAC_VALIDATION.md`および`sessions/2026-09-14-weekly-review-v1.md`を正本とする。このblockerを解消して検証baselineを回復するまで、最新追加分を「テスト済み」と扱わない。
+- 週間振り返りv1と日記のDraft／active二重表示修正はWindowsで実装済み。日記cacheの型推論エラー修正後にDebug実機buildとVesperaでの起動を確認した。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了であり、`MAC_VALIDATION.md`の「2026-09-14追加分」をMacで完了するまで、機能全体は「テスト済み」と扱わない。
+- 最新の検証手順と記録は`MAC_VALIDATION.md`、`sessions/2026-09-14-weekly-review-v1.md`、`sessions/2026-09-18-vespera-signing-build.md`を正本とする。
 - Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**。
 
 ## 実装済み

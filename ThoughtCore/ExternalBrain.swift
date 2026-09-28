@@ -392,7 +392,7 @@ public final class ExternalBrainCache: @unchecked Sendable {
     public func manifest() -> ExternalBrainManifest { guard let data = try? Data(contentsOf: manifestURL), let value = try? JSONDecoder.externalBrain.decode(ExternalBrainManifest.self, from: data) else { return ExternalBrainManifest() }; return value }
     public func markdown(at path: String) throws -> String { guard ExternalBrainPath.isSafe(path) else { throw ExternalBrainError.unsafePath(path) }; let data = try Data(contentsOf: localURL(path)); guard let value = String(data: data, encoding: .utf8) else { throw ExternalBrainError.invalidMarkdown }; return value }
     public func journalEntries() -> [ExternalBrainJournalEntry] {
-        let entries = manifest().files.keys.sorted().compactMap { path in
+        let entries: [ExternalBrainJournalEntry] = manifest().files.keys.sorted().compactMap { path in
             guard let markdown = try? self.markdown(at: path) else { return nil }
             let parsed = MarkdownFrontMatterParser.parse(markdown)
             guard parsed.metadata.type?.lowercased() == KnowledgeDraftType.journal.rawValue,
