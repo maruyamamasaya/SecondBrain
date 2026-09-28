@@ -39,8 +39,8 @@ public enum AIPersonaPersistenceError: Error, LocalizedError, Equatable {
     }
 }
 
-public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRepository, ThoughtMentionRepository, AIPersonaRepository, AIThoughtReplyRepository, HumanThoughtReplyRepository, ThoughtRelationRepository, ThoughtContinuationRepository, ThoughtTagRepository, ThoughtAnalyticsRepository, ReviewSummaryRepository, DailySummaryRepository, WeeklyReviewRepository, PersonaRepository, AIAPIUsageRepository, AIAPIUsageAnalyticsRepository, KnowledgeDraftRepository, KnowledgeLifecycleEventRepository, @unchecked Sendable {
-    public static let schemaVersion: Int32 = 20
+public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRepository, ThoughtMentionRepository, AIPersonaRepository, AIThoughtReplyRepository, HumanThoughtReplyRepository, ThoughtRelationRepository, ThoughtContinuationRepository, ThoughtTagRepository, ThoughtAnalyticsRepository, ReviewSummaryRepository, DailySummaryRepository, WeeklyReviewRepository, SecondBrainAppRepository, PersonaRepository, AIAPIUsageRepository, AIAPIUsageAnalyticsRepository, KnowledgeDraftRepository, KnowledgeLifecycleEventRepository, @unchecked Sendable {
+    public static let schemaVersion: Int32 = 21
     private static let localAccountID = "owner"
 
     private let databaseURL: URL
@@ -920,6 +920,78 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
         }
     }
 
+    public func fetchAllApps() throws -> [SecondBrainApp] {
+        try lock.withLock {
+            try querySecondBrainApps(
+                "SELECT id, name, description, icon, kind, launch_target_type, launch_target_value, category, is_favorite, sort_order, created_at, updated_at FROM secondbrain_apps ORDER BY sort_order ASC, name COLLATE NOCASE ASC, id ASC"
+            )
+        }
+    }
+
+    public func fetchApp(id: UUID) throws -> SecondBrainApp? {
+        try lock.withLock {
+            try querySecondBrainApps(
+                "SELECT id, name, description, icon, kind, launch_target_type, launch_target_value, category, is_favorite, sort_order, created_at, updated_at FROM secondbrain_apps WHERE id = ? LIMIT 1",
+                bind: { try self.bind(id.uuidString, to: 1, in: $0) }
+            ).first
+        }
+    }
+
+    public func createApp(_ app: SecondBrainApp) throws {
+        try lock.withLock {
+            guard try !secondBrainAppExists(id: app.id) else {
+                throw SecondBrainAppRepositoryError.duplicateID(app.id)
+            }
+            let statement = try prepare("INSERT INTO secondbrain_apps(id, name, description, icon, kind, launch_target_type, launch_target_value, category, is_favorite, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            defer { sqlite3_finalize(statement) }
+            try bindSecondBrainApp(app, to: statement)
+            try stepDone(statement)
+            createRollingBackupIfPossible()
+        }
+    }
+
+    public func updateApp(_ app: SecondBrainApp) throws {
+        try lock.withLock {
+            guard let existing = try querySecondBrainApps(
+                "SELECT id, name, description, icon, kind, launch_target_type, launch_target_value, category, is_favorite, sort_order, created_at, updated_at FROM secondbrain_apps WHERE id = ? LIMIT 1",
+                bind: { try self.bind(app.id.uuidString, to: 1, in: $0) }
+            ).first else {
+                throw SecondBrainAppRepositoryError.notFound(app.id)
+            }
+            guard existing.createdAt == app.createdAt else {
+                throw SecondBrainAppRepositoryError.createdAtChanged(app.id)
+            }
+            let statement = try prepare("UPDATE secondbrain_apps SET name = ?, description = ?, icon = ?, kind = ?, launch_target_type = ?, launch_target_value = ?, category = ?, is_favorite = ?, sort_order = ?, updated_at = ? WHERE id = ?")
+            defer { sqlite3_finalize(statement) }
+            try bind(app.name, to: 1, in: statement)
+            try bind(app.description, to: 2, in: statement)
+            try bind(app.icon, to: 3, in: statement)
+            try bind(app.kind.rawValue, to: 4, in: statement)
+            try bind(app.launchTarget.storageKind.rawValue, to: 5, in: statement)
+            try bind(app.launchTarget.storageValue, to: 6, in: statement)
+            try bind(app.category, to: 7, in: statement)
+            try bind(app.isFavorite ? Int32(1) : Int32(0), to: 8, in: statement)
+            try bind(Int64(app.sortOrder), to: 9, in: statement)
+            try bind(app.updatedAt.timeIntervalSince1970, to: 10, in: statement)
+            try bind(app.id.uuidString, to: 11, in: statement)
+            try stepDone(statement)
+            createRollingBackupIfPossible()
+        }
+    }
+
+    public func deleteApp(id: UUID) throws {
+        try lock.withLock {
+            guard try secondBrainAppExists(id: id) else {
+                throw SecondBrainAppRepositoryError.notFound(id)
+            }
+            let statement = try prepare("DELETE FROM secondbrain_apps WHERE id = ?")
+            defer { sqlite3_finalize(statement) }
+            try bind(id.uuidString, to: 1, in: statement)
+            try stepDone(statement)
+            createRollingBackupIfPossible()
+        }
+    }
+
     public func create(_ relation: ThoughtRelation) throws {
         try lock.withLock {
             try validate(relation)
@@ -1498,6 +1570,35 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
                 try execute("PRAGMA user_version = 20")
             }
         }
+        if version < 21 {
+            try transaction {
+                try execute("""
+                    CREATE TABLE secondbrain_apps (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+                        description TEXT NOT NULL,
+                        icon TEXT NOT NULL,
+                        kind TEXT NOT NULL CHECK (kind IN ('native', 'web', 'localWeb', 'external')),
+                        launch_target_type TEXT NOT NULL CHECK (launch_target_type IN ('nativeFeature', 'webURL', 'localURL', 'deepLink')),
+                        launch_target_value TEXT NOT NULL CHECK (length(launch_target_value) > 0),
+                        category TEXT NOT NULL,
+                        is_favorite INTEGER NOT NULL CHECK (is_favorite IN (0, 1)),
+                        sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL CHECK (updated_at >= created_at),
+                        CHECK (
+                            (kind = 'native' AND launch_target_type = 'nativeFeature') OR
+                            (kind = 'web' AND launch_target_type = 'webURL') OR
+                            (kind = 'localWeb' AND launch_target_type = 'localURL') OR
+                            (kind = 'external' AND launch_target_type IN ('webURL', 'deepLink'))
+                        )
+                    )
+                    """)
+                try execute("CREATE INDEX secondbrain_apps_order_idx ON secondbrain_apps(sort_order ASC, name COLLATE NOCASE ASC, id ASC)")
+                try execute("CREATE INDEX secondbrain_apps_favorite_idx ON secondbrain_apps(is_favorite DESC, sort_order ASC)")
+                try execute("PRAGMA user_version = 21")
+            }
+        }
     }
 
     private func relationTableSupportsReplies() throws -> Bool {
@@ -1535,6 +1636,7 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
             "daily_summaries": ["id", "day_start", "day_end", "content_json"],
             "weekly_summaries": ["id", "week_start", "week_end", "content_json"],
             "weekly_plans": ["id", "target_week_start", "target_week_end", "source_summary_id", "content_json"],
+            "secondbrain_apps": ["id", "name", "description", "icon", "kind", "launch_target_type", "launch_target_value", "category", "is_favorite", "sort_order", "created_at", "updated_at"],
             "ai_api_usage": ["id", "feature", "status", "source_type"],
             "knowledge_drafts": ["id", "body", "review_status", "sync_status"],
             "knowledge_documents": ["id", "draft_id", "status", "retrieval_count"],
@@ -1942,6 +2044,63 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
     private func optionalText(_ statement: OpaquePointer, _ column: Int32) -> String? { sqlite3_column_type(statement,column) == SQLITE_NULL ? nil : text(statement,column) }
     private func optionalDate(_ statement: OpaquePointer, _ column: Int32) -> Date? { sqlite3_column_type(statement,column) == SQLITE_NULL ? nil : Date(timeIntervalSince1970:sqlite3_column_double(statement,column)) }
 
+    private func secondBrainAppExists(id: UUID) throws -> Bool {
+        let statement = try prepare("SELECT 1 FROM secondbrain_apps WHERE id = ? LIMIT 1")
+        defer { sqlite3_finalize(statement) }
+        try bind(id.uuidString, to: 1, in: statement)
+        let result = sqlite3_step(statement)
+        guard result == SQLITE_ROW || result == SQLITE_DONE else { throw lastError() }
+        return result == SQLITE_ROW
+    }
+
+    private func bindSecondBrainApp(_ app: SecondBrainApp, to statement: OpaquePointer) throws {
+        try bind(app.id.uuidString, to: 1, in: statement)
+        try bind(app.name, to: 2, in: statement)
+        try bind(app.description, to: 3, in: statement)
+        try bind(app.icon, to: 4, in: statement)
+        try bind(app.kind.rawValue, to: 5, in: statement)
+        try bind(app.launchTarget.storageKind.rawValue, to: 6, in: statement)
+        try bind(app.launchTarget.storageValue, to: 7, in: statement)
+        try bind(app.category, to: 8, in: statement)
+        try bind(app.isFavorite ? Int32(1) : Int32(0), to: 9, in: statement)
+        try bind(Int64(app.sortOrder), to: 10, in: statement)
+        try bind(app.createdAt.timeIntervalSince1970, to: 11, in: statement)
+        try bind(app.updatedAt.timeIntervalSince1970, to: 12, in: statement)
+    }
+
+    private func querySecondBrainApps(_ sql: String, bind binder: (OpaquePointer) throws -> Void = { _ in }) throws -> [SecondBrainApp] {
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
+        try binder(statement)
+        var apps: [SecondBrainApp] = []
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
+            guard let id = UUID(uuidString: text(statement, 0)),
+                  let kind = SecondBrainAppKind(rawValue: text(statement, 4)),
+                  let targetKind = SecondBrainAppLaunchTarget.StorageKind(rawValue: text(statement, 5)) else {
+                throw SQLiteThoughtRepositoryError.invalidRecord
+            }
+            let target = try SecondBrainAppLaunchTarget.restoring(storageKind: targetKind, value: text(statement, 6))
+            let app = try SecondBrainApp(
+                id: id,
+                name: text(statement, 1),
+                description: text(statement, 2),
+                icon: text(statement, 3),
+                kind: kind,
+                launchTarget: target,
+                category: text(statement, 7),
+                isFavorite: sqlite3_column_int(statement, 8) != 0,
+                sortOrder: Int(sqlite3_column_int64(statement, 9)),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 10)),
+                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 11))
+            )
+            apps.append(app)
+            result = sqlite3_step(statement)
+        }
+        guard result == SQLITE_DONE else { throw lastError() }
+        return apps
+    }
+
     private func transaction(_ work: () throws -> Void) throws {
         try execute("BEGIN IMMEDIATE")
         do {
@@ -2075,6 +2234,10 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
 
     private func bind(_ value: Int32, to index: Int32, in statement: OpaquePointer) throws {
         guard sqlite3_bind_int(statement, index, value) == SQLITE_OK else { throw lastError() }
+    }
+
+    private func bind(_ value: Int64, to index: Int32, in statement: OpaquePointer) throws {
+        guard sqlite3_bind_int64(statement, index, value) == SQLITE_OK else { throw lastError() }
     }
 
     private func stepDone(_ statement: OpaquePointer) throws {

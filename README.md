@@ -24,7 +24,7 @@ SecondBrain
    └─ External Services
 ```
 
-SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Toolsの統合Hubは構想・設計準備段階で、現行アプリにはまだ実装されていません。
+SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Tools HubはDomainとSQLite永続化までWindowsで実装済みで、一覧UIと起動処理は未実装です。
 
 ## Thought
 
@@ -75,7 +75,7 @@ AI Persona
 - Markdown / JSON Export、内部／外部Backup、Restore
 - iOS accessibility、Theme
 
-SQLite schemaはv20です。週間振り返りと日記表示修正を含む最新コードは、Swift 6.3で判明したcompile blockerのため検証完了前です。正確な実装・検証状況は[`CURRENT.md`](CURRENT.md)、Macでの残作業は[`MAC_VALIDATION.md`](MAC_VALIDATION.md)を参照してください。
+SQLite schemaはv21です。週間振り返り、日記表示修正、Apps / Tools Hub Domain／Persistenceを含む最新コードはMac/Xcode compile未確認です。正確な実装・検証状況は[`CURRENT.md`](CURRENT.md)、Macでの残作業は[`MAC_VALIDATION.md`](MAC_VALIDATION.md)を参照してください。
 
 ## Apps / Tools
 

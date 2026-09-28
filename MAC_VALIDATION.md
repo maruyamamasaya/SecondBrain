@@ -24,6 +24,27 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] 別内容の未正式化Draftは日記画面から消えない
 - [ ] Xcode／macOS／Simulator、実施日、成功件数、失敗・残課題を`sessions/`へ追記する
 
+## 2026-09-28追加分（Apps / Tools Hub v1 Domain／Persistence）
+
+状態: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／実機確認未実施**。既知のSwift 6.3 compile blockerを先に解消し、以下を順に確認する。
+
+- [ ] `ThoughtCore/ExternalBrain.swift`のSwift 6.3 compile blockerを解消する
+- [ ] `SecondBrainApp.swift`を含むSwift PackageがSwift 6.3でcompileできる
+- [ ] `swift test`で`SecondBrainAppTests`を含む全testが成功する
+- [ ] `AiTextApp.xcodeproj`のDebug Simulator buildが成功し、追加したCore fileがapp targetへ含まれる
+- [ ] schema v20 DBをv21へmigrationし、既存Thought／Persona／Knowledge／Weekly Summaryが保持される
+- [ ] 新規DBがschema v21で作成され、`secondbrain_apps` health checkと`PRAGMA integrity_check`が成功する
+- [ ] Appの追加／取得／更新／削除、sortOrder順、お気に入り永続化、再起動後再読込を確認する
+- [ ] sample fixtureが本番DBへ自動登録されないことを確認する
+- [ ] Apps一覧、App名、種別、お気に入り、起動ボタン相当を確認する（UI実装後）
+- [ ] HTTPS URL起動、Local WebのHTTP／HTTPS起動、External Deep Link、Native routeを確認する（起動処理実装後）
+- [ ] 不正URL、危険scheme、公開hostをLocal Webとして登録する操作が拒否される
+- [ ] Local Webを実機から同一LANで開き、offline／到達不能時の表示を確認する
+- [ ] SwiftUIをiPhone SE相当、最新標準iPhone、Dynamic Type、Dark Mode、VoiceOverで確認する
+- [ ] WebViewを将来導入した場合だけ、navigation、認証、外部遷移、cookie／storage、閉じる操作を別途確認する。v1 Domain／PersistenceではWebView未導入
+- [ ] 外部完全Backup／Restore後にApps catalogと既存Coreデータが復元される
+- [ ] XCTestDevicesの開始時一覧・容量、新規作成数、削除数、終了時容量を記録する
+
 ## 1. Swift Package Tests
 
 - [ ] Repository rootで`swift test`が全件成功する

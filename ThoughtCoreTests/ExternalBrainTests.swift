@@ -309,7 +309,7 @@ private func temporaryBrain() throws -> (URL, ExternalBrainCache) {
 
 @Test func schemaV13PersistsReviewAndPromotedKnowledge() throws {
     let directory=FileManager.default.temporaryDirectory.appendingPathComponent("knowledge-review-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at:directory) }; try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-    let repository=try SQLiteThoughtRepository(databaseURL:directory.appendingPathComponent("db.sqlite3")); #expect(SQLiteThoughtRepository.schemaVersion == 20)
+    let repository=try SQLiteThoughtRepository(databaseURL:directory.appendingPathComponent("db.sqlite3")); #expect(SQLiteThoughtRepository.schemaVersion == 21)
     var draft=KnowledgeDraft(title:"Approved",type:.knowledge,tags:["swift"],source:.dailySummary,body:"# Knowledge\nStable",provenance:.init(sourceID:"summary",dailySummaryDate:Date(timeIntervalSince1970:0)))
     try repository.saveKnowledgeDraft(draft); draft=try KnowledgeDraftTransition.applying(.approved,to:draft); try repository.saveKnowledgeDraft(draft); #expect(try repository.fetchKnowledgeDraft(id:draft.id)?.reviewStatus == .approved)
     let sha="abc123",path=KnowledgeDocumentPath.targetPath(date:Date(),title:draft.title); var promoted=try KnowledgeDraftTransition.applying(.promoted,to:draft); promoted.knowledgePath=path; promoted.knowledgeSHA=sha

@@ -66,6 +66,6 @@ struct WeeklyReviewTests {
         let plan = WeeklyPlan(targetWeekStart: interval.end, targetWeekEnd: calendar.date(byAdding: .weekOfYear, value: 1, to: interval.end)!, sourceSummaryID: summary.id, content: .init(focus: "軸", actions: ["行動"], questions: ["問い"]), provider: "openai", model: "gpt-5.6-terra", promptVersion: 1)
         try repository.saveWeeklyPlan(plan)
         #expect(try repository.fetchWeeklyPlan(targetWeekStart: interval.end) == plan)
-        #expect(SQLiteThoughtRepository.schemaVersion == 20)
+        #expect(SQLiteThoughtRepository.schemaVersion == 21)
     }
 }

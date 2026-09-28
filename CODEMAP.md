@@ -2,7 +2,7 @@
 
 機能から主要コードへ到達するための索引です。
 
-現行コードだけを対象とします。Apps / Tools Hubは未実装で、候補domainと想定boundaryは`NEXT_FEATURES.md`にあります。
+現行コードだけを対象とします。Apps / Tools HubのDomain／Persistenceは実装済みで、未実装のUI／起動処理は`NEXT_FEATURES.md`にあります。
 
 ## Application Entry / UI
 
@@ -35,6 +35,8 @@ Search: `@main|TimelineView|ThoughtStore|confirmationDialog`
 
 ## Thought Domain
 
+- `ThoughtCore/SecondBrainApp.swift` — Apps / Tools共通model、Native／Web／Local Web／External種別、分離したlaunch target、URL／scheme／local host／sort order validation、Repository protocol、DBへseedしないsample fixture。
+
 - `ThoughtCore/Thought.swift` — 原文、Persona、AI Persona設定、AI投稿／AI返信preview・生成use case、typed Reply Contextと取得repository境界、メンションmodel。
 - `ThoughtCore/ThoughtDraft.swift` — 140文字、trim、validation。
 - `ThoughtCore/ThoughtTimeline.swift` — 投稿、降順表示、初回50件とkeyset cursorによる追加読込、soft delete use case。
@@ -47,7 +49,7 @@ Search: `ThoughtDraft|post|delete|deletedAt`
 ## Persistence
 
 - `ThoughtCore/ThoughtRepository.swift` — CRUD・Timeline page・本文検索・通常の日付範囲query・Daily Summary専用`fetchHumanThoughts(from:to:)`境界、Review期間計算、テスト用メモリ実装。
-- `ThoughtCore/SQLiteThoughtRepository.swift` — SQLite schema v20、作成日時＋UUIDのkeyset Timeline page、Persona／投稿者／AI設定・Provider・生成来歴／メンション／AI返信Relation、Daily／Weekly SummaryとWeekly Plan、Knowledge Review／Quality／usage、実カラム照合migration、各種query、旧JSON migration／2世代backup。
+- `ThoughtCore/SQLiteThoughtRepository.swift` — SQLite schema v21、作成日時＋UUIDのkeyset Timeline page、Persona／投稿者／AI設定・Provider・生成来歴／メンション／AI返信Relation、Daily／Weekly SummaryとWeekly Plan、独立Apps catalog CRUD、Knowledge Review／Quality／usage、実カラム照合migration、各種query、旧JSON migration／2世代backup。
 - `ThoughtCore/ReviewSummary.swift` — AI要約model、immutable送信preview、通信／transport／保存protocol、中央provider／model設定、用途別`AIGenerationProfile`、typed service error、対象準備／鮮度検証／生成・保存use case、Mock client。
 - `ThoughtCore/DailySummary.swift` — Human限定のv3 prompt、確定Humanタグ・時間帯・Human Relation、stale対応preview、準備／生成use case。既存v1／v2 modelの互換decodeは維持し、新規生成ではAI本文・`aiInteractions`を扱わない。
 - `ThoughtCore/WeeklyReview.swift` — 月曜〜日曜の週境界、Human限定週間Summary、次週Plan、用途別prompt／preview／生成use case、確定前Planを保存しないrepository境界。
@@ -69,6 +71,8 @@ Search: `ThoughtRepository|ThoughtRelationRepository|createContinuation|SQLiteTh
 - `ThoughtCoreTests/AIAPIUsageTests.swift` — 記録、集計、privacy、failure isolation。
 
 ## Tests
+
+- `ThoughtCoreTests/SecondBrainAppTests.swift` — App validation、sample fixture非seed、SQLite CRUD／順序／お気に入り／削除、既存Thoughtを保持するschema v20→v21 migration。
 
 - `ThoughtCoreTests/ThoughtTimelineTests.swift` — 投稿境界、Unicode、SQL順序、50件単位のページングと同一日時cursor、削除、本文検索、タグ・v4 migration、再読込、Export、Review期間・順序・件数。
 - `ThoughtCoreTests/ExternalBrainTests.swift` — AGENT parser、path traversal、front matter、heading chunk、draft除外、SHA差分同期／削除／offline cache、Persona route、最大件数、0件、prompt境界。

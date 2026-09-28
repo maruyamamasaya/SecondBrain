@@ -43,6 +43,7 @@
 		H10000000000000000000001 /* OpenAIReviewSummaryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = H20000000000000000000001 /* OpenAIReviewSummaryClient.swift */; };
 		E1A000000000000000000001 /* WeeklyReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000000000000000000001 /* WeeklyReview.swift */; };
 		E1A000000000000000000002 /* WeeklyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000000000000000000002 /* WeeklyReviewView.swift */; };
+		E1B000000000000000000001 /* SecondBrainApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B000000000000000000001 /* SecondBrainApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +94,7 @@
 		H20000000000000000000001 /* OpenAIReviewSummaryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIReviewSummaryClient.swift; sourceTree = "<group>"; };
 		E2A000000000000000000001 /* WeeklyReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReview.swift; sourceTree = "<group>"; };
 		E2A000000000000000000002 /* WeeklyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReviewView.swift; sourceTree = "<group>"; };
+		E2B000000000000000000001 /* SecondBrainApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +179,7 @@
 				B20000000000000000000026 /* ThoughtAnalytics.swift */,
 				A2D000000000000000000001 /* DailySummary.swift */,
 				E2A000000000000000000001 /* WeeklyReview.swift */,
+				E2B000000000000000000001 /* SecondBrainApp.swift */,
 				F20000000000000000000001 /* ExternalBrain.swift */,
 				G20000000000000000000001 /* AIAPIUsage.swift */,
 			);
@@ -367,6 +370,7 @@
 				G10000000000000000000002 /* AIAPIUsageAnalyticsView.swift in Sources */,
 				H10000000000000000000001 /* OpenAIReviewSummaryClient.swift in Sources */,
 				E1A000000000000000000001 /* WeeklyReview.swift in Sources */,
+				E1B000000000000000000001 /* SecondBrainApp.swift in Sources */,
 				E1A000000000000000000002 /* WeeklyReviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
