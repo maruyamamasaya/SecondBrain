@@ -24,7 +24,7 @@ SecondBrain
    └─ External Services
 ```
 
-SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Tools HubはDomainとSQLite永続化までWindowsで実装済みで、一覧UIと起動処理は未実装です。
+SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Tools HubはDomain、SQLite永続化、4件のDefault Catalog v1までWindowsで実装済みで、一覧UIと起動処理は未実装です。
 
 ## Thought
 
@@ -75,11 +75,11 @@ AI Persona
 - Markdown / JSON Export、内部／外部Backup、Restore
 - iOS accessibility、Theme
 
-SQLite schemaはv21です。週間振り返り、日記表示修正、Apps / Tools Hub Domain／Persistenceを含む最新コードはMac/Xcode compile未確認です。正確な実装・検証状況は[`CURRENT.md`](CURRENT.md)、Macでの残作業は[`MAC_VALIDATION.md`](MAC_VALIDATION.md)を参照してください。
+SQLite schemaはv22です。週間振り返り、日記表示修正、Apps / Tools Hub Domain／Persistence／Default Catalogを含む最新コードはMac/Xcode compile未確認です。正確な実装・検証状況は[`CURRENT.md`](CURRENT.md)、Macでの残作業は[`MAC_VALIDATION.md`](MAC_VALIDATION.md)を参照してください。
 
 ## Apps / Tools
 
-将来は、SecondBrain内のNative機能、GitHub Pages、独立Webアプリ、ローカルネットワーク上のWebアプリ、外部サービスを共通の`App`として扱います。初期設計の前提、候補scope、未決定事項は[`NEXT_FEATURES.md`](NEXT_FEATURES.md)にまとめています。
+SecondBrain内のNative機能、GitHub Pages、独立Webアプリ、ローカルネットワーク上のWebアプリ、外部サービスを共通の`App`として扱うDomain／Persistence基盤があります。Default Catalog v1にはShared Memo、My Wiki、Study、Toolを定義しています。残るUI／起動処理と未決定事項は[`NEXT_FEATURES.md`](NEXT_FEATURES.md)にまとめています。
 
 ## Development
 

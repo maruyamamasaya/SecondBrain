@@ -1,6 +1,6 @@
 # 0009: Apps / Tools catalogをCoreから分離して正本SQLiteへ保存する
 
-- Status: Accepted
+- Status: Accepted（本番DBをseedしない判断だけ0010で置換）
 - Date: 2026-09-28
 
 ## Context
@@ -14,7 +14,7 @@ SecondBrainを自作アプリ、Webツール、Local Web、外部サービスへ
 - Domain生成時にname、sortOrder、URL、scheme、Local Web host、kind／target整合性を検証する。
 - catalogはschema v21の`secondbrain_apps`へ保存する。Thought／Persona／Knowledge tableへの外部キーを持たせない。
 - `SecondBrainAppRepository`をDomain境界とし、現行の正本DBを所有する`SQLiteThoughtRepository`が実装する。
-- sample Appはtest fixtureだけに置き、本番DBを自動seedしない。
+- 当初はsample Appをtest fixtureだけに置き、本番DBを自動seedしない方針とした。この項目は、実在Appを正式なDefault Catalogとして扱う0010で置き換えた。
 - catalogは正本SQLiteの完全Backup / Restore対象に含める。
 - UI、Native route解決、URL起動、到達確認、WebView、App間データ共有、AIによるApp操作はこのDecisionの実装範囲に含めない。
 
@@ -26,7 +26,7 @@ SecondBrainを自作アプリ、Webツール、Local Web、外部サービスへ
 
 - UserDefaults: 少量データには簡単だが、一覧順序、更新、完全Backup / Restore、schema検証の境界が既存DBと分かれるため採用しない。
 - 別SQLiteファイル: 障害分離は強いが、Backup / Restoreとtransaction運用が増えるためv1では採用しない。
-- bundled catalogの自動seed: すぐ一覧を表示できるが、ユーザーの正本データとsampleを混同するため採用しない。
+- bundled sample catalogの自動seed: すぐ一覧を表示できるが、ユーザーの正本データとsampleを混同するため当初は採用しなかった。正式なDefault Catalogと削除履歴を分離する方式は0010で再評価した。
 - `kind`から起動先を推測: modelは小さくなるが、ExternalのHTTPS／Deep Linkなど一対多の関係を安全に表現できないため採用しない。
 
 ## Consequences

@@ -40,16 +40,62 @@ struct SecondBrainAppTests {
         #expect(deepLink.launchTarget.storageValue == "github://notifications")
     }
 
-    @Test func fixturesAreStableAndAreNotAutomaticallySeeded() throws {
-        let apps = try SecondBrainAppFixtures.samples()
-        #expect(apps.map(\.name) == ["HomeMuseum", "Baby Media", "GitHub Monitor"])
-        #expect(apps.map(\.sortOrder) == [0, 1, 2])
-        #expect(apps[1].kind == .localWeb)
+    @Test func defaultCatalogUsesStableIDsOrderFavoritesAndStudyFragment() throws {
+        let apps = try SecondBrainDefaultApps.all(createdAt: Date(timeIntervalSince1970: 100))
+        #expect(SecondBrainDefaultApps.catalogVersion == 1)
+        #expect(SecondBrainDefaultApps.sharedMemoID.uuidString == "40000000-0000-4000-8000-000000000001")
+        #expect(SecondBrainDefaultApps.myWikiID.uuidString == "40000000-0000-4000-8000-000000000002")
+        #expect(SecondBrainDefaultApps.studyID.uuidString == "40000000-0000-4000-8000-000000000003")
+        #expect(SecondBrainDefaultApps.toolID.uuidString == "40000000-0000-4000-8000-000000000004")
+        #expect(apps.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
+        #expect(apps.map(\.name) == ["Shared Memo", "My Wiki", "Study", "Tool"])
+        #expect(apps.map(\.sortOrder) == [10, 20, 30, 40])
+        #expect(apps.map(\.isFavorite) == [true, true, false, false])
+        #expect(apps[2].launchTarget.storageValue == "https://maruyamamasaya.github.io/study/#/")
 
+        let previewFixtures = try SecondBrainAppFixtures.samples()
+        #expect(Set(previewFixtures.map(\.id)).isDisjoint(with: Set(apps.map(\.id))))
+    }
+
+    @Test func defaultSeedIsMissingOnlyAndDeletionDoesNotRestoreApp() throws {
         let fixture = try AppFixture()
         defer { fixture.remove() }
-        let repository = try fixture.repository()
-        #expect(try repository.fetchAllApps().isEmpty)
+        do {
+            let repository = try fixture.repository()
+            let defaults = try repository.fetchAllApps()
+            #expect(defaults.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
+
+            let sharedMemo = try #require(repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID))
+            let edited = try SecondBrainApp(
+                id: sharedMemo.id,
+                name: "自分用メモ",
+                description: "自分で編集した説明",
+                icon: "star",
+                kind: sharedMemo.kind,
+                launchTarget: .webURL("https://example.com/edited?mode=1#section"),
+                category: "自分用",
+                isFavorite: false,
+                sortOrder: 15,
+                createdAt: sharedMemo.createdAt,
+                updatedAt: sharedMemo.updatedAt.addingTimeInterval(100)
+            )
+            try repository.updateApp(edited)
+            try repository.deleteApp(id: SecondBrainDefaultApps.toolID)
+            #expect(try repository.seedDefaultAppsIfNeeded(now: sharedMemo.updatedAt.addingTimeInterval(200)) == 0)
+            #expect(try repository.fetchApp(id: sharedMemo.id) == edited)
+            #expect(try repository.fetchApp(id: SecondBrainDefaultApps.toolID) == nil)
+        }
+
+        let reopened = try fixture.repository()
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.name == "自分用メモ")
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.description == "自分で編集した説明")
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.icon == "star")
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.launchTarget.storageValue == "https://example.com/edited?mode=1#section")
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.category == "自分用")
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.isFavorite == false)
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.sortOrder == 15)
+        #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.toolID) == nil)
+        #expect(try reopened.fetchAllApps().count == 3)
     }
 
     @Test func sqliteCreatesUpdatesOrdersFavoritesAndDeletesApps() throws {
@@ -65,12 +111,12 @@ struct SecondBrainAppTests {
 
         try repository.createApp(first)
         try repository.createApp(second)
-        #expect(try repository.fetchAllApps().map(\.id) == [secondID, firstID])
+        #expect(Array(try repository.fetchAllApps().prefix(2).map(\.id)) == [secondID, firstID])
         #expect(try repository.fetchApp(id: secondID)?.isFavorite == true)
 
         let updated = try SecondBrainApp(id: firstID, name: "Updated", description: "changed", icon: "hammer", kind: .external, launchTarget: .deepLink("github://repositories"), category: "Developer Tools", isFavorite: true, sortOrder: 0, createdAt: createdAt, updatedAt: later)
         try repository.updateApp(updated)
-        #expect(try repository.fetchAllApps().map(\.name) == ["Updated", "First"])
+        #expect(Array(try repository.fetchAllApps().prefix(2).map(\.name)) == ["Updated", "First"])
         #expect(try repository.fetchApp(id: firstID) == updated)
 
         let changedCreation = try SecondBrainApp(id: firstID, name: "Invalid history", kind: .web, launchTarget: .webURL("https://example.com"), createdAt: later, updatedAt: later)
@@ -81,7 +127,28 @@ struct SecondBrainAppTests {
         #expect(throws: SecondBrainAppRepositoryError.notFound(secondID)) { try repository.deleteApp(id: secondID) }
     }
 
-    @Test func migratesSchemaV20WithoutChangingThoughtsOrSeedingApps() throws {
+    @Test func preservesURLQueriesAndFragmentsThroughSQLiteRoundTrip() throws {
+        let fixture = try AppFixture()
+        defer { fixture.remove() }
+        let repository = try fixture.repository()
+        let values = [
+            "https://example.com/",
+            "https://example.com/path/",
+            "https://example.com/#/",
+            "https://example.com/#/page",
+            "https://example.com/path?mode=1#section"
+        ]
+
+        for (index, value) in values.enumerated() {
+            let app = try SecondBrainApp(name: "URL \(index)", kind: .web, launchTarget: .webURL(value), sortOrder: 100 + index)
+            try repository.createApp(app)
+            #expect(try repository.fetchApp(id: app.id)?.launchTarget.storageValue == value)
+        }
+
+        #expect(try repository.fetchApp(id: SecondBrainDefaultApps.studyID)?.launchTarget.storageValue == "https://maruyamamasaya.github.io/study/#/")
+    }
+
+    @Test func migratesSchemaV21SeedsMissingDefaultsAndPreservesExistingRecords() throws {
         let fixture = try AppFixture()
         defer { fixture.remove() }
         let thought = Thought(id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!, body: "migrationで保持するThought", createdAt: Date(timeIntervalSince1970: 10))
@@ -89,15 +156,38 @@ struct SecondBrainAppTests {
         do {
             let repository = try fixture.repository()
             try repository.create(thought)
-            #expect(SQLiteThoughtRepository.schemaVersion == 21)
+            let sharedMemo = try #require(repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID))
+            try repository.updateApp(SecondBrainApp(id: sharedMemo.id, name: "編集済みShared Memo", description: sharedMemo.description, icon: sharedMemo.icon, kind: sharedMemo.kind, launchTarget: .webURL("https://example.com/custom/#/"), category: sharedMemo.category, isFavorite: false, sortOrder: 11, createdAt: sharedMemo.createdAt, updatedAt: sharedMemo.updatedAt.addingTimeInterval(1)))
+            #expect(SQLiteThoughtRepository.schemaVersion == 22)
         }
-        try fixture.removeAppsTableAndMarkV20()
+        try fixture.prepareV21KeepingOnlyApp(id: SecondBrainDefaultApps.sharedMemoID)
 
         let migrated = try fixture.repository()
-        #expect(try fixture.sqliteUserVersion() == 21)
+        #expect(try fixture.sqliteUserVersion() == 22)
         #expect(try migrated.fetchAll().map(\.id).contains(thought.id))
-        #expect(try migrated.fetchAllApps().isEmpty)
+        #expect(try migrated.fetchAllApps().count == 4)
+        #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.name == "編集済みShared Memo")
+        #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.launchTarget.storageValue == "https://example.com/custom/#/")
+        #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.myWikiID) != nil)
+        #expect(try fixture.defaultSeedHistoryCount() == 4)
+        #expect(try fixture.defaultSeedCatalogVersions() == [1])
         #expect(try fixture.tableColumns("secondbrain_apps").isSuperset(of: ["id", "name", "kind", "launch_target_type", "launch_target_value", "is_favorite", "sort_order"]))
+    }
+
+    @Test func migratesSchemaV20ThroughV22WithoutChangingThoughts() throws {
+        let fixture = try AppFixture()
+        defer { fixture.remove() }
+        let thought = Thought(body: "v20から保持するThought", createdAt: Date(timeIntervalSince1970: 20))
+        do {
+            let repository = try fixture.repository()
+            try repository.create(thought)
+        }
+        try fixture.removeAppsTablesAndMarkV20()
+
+        let migrated = try fixture.repository()
+        #expect(try fixture.sqliteUserVersion() == 22)
+        #expect(try migrated.fetchAll().contains(where: { $0.id == thought.id }))
+        #expect(try migrated.fetchAllApps().map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
     }
 }
 
@@ -114,16 +204,61 @@ private struct AppFixture {
         try SQLiteThoughtRepository(databaseURL: databaseURL)
     }
 
-    func removeAppsTableAndMarkV20() throws {
+    func prepareV21KeepingOnlyApp(id: UUID) throws {
         var database: OpaquePointer?
         guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
             throw SQLiteThoughtRepositoryError.open("test setup")
         }
         defer { sqlite3_close(database) }
-        let sql = "DROP TABLE secondbrain_apps; PRAGMA user_version = 20;"
+        let sql = "DROP TABLE secondbrain_default_app_seed_history; DELETE FROM secondbrain_apps WHERE id <> '\(id.uuidString)'; PRAGMA user_version = 21;"
         guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
             throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
         }
+    }
+
+    func removeAppsTablesAndMarkV20() throws {
+        var database: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+            throw SQLiteThoughtRepositoryError.open("test setup")
+        }
+        defer { sqlite3_close(database) }
+        let sql = "DROP TABLE secondbrain_default_app_seed_history; DROP TABLE secondbrain_apps; PRAGMA user_version = 20;"
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+            throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
+        }
+    }
+
+    func defaultSeedHistoryCount() throws -> Int {
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(databaseURL.path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let database else {
+            throw SQLiteThoughtRepositoryError.open("test setup")
+        }
+        defer { sqlite3_close(database) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "SELECT COUNT(*) FROM secondbrain_default_app_seed_history", -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw SQLiteThoughtRepositoryError.invalidRecord }
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    func defaultSeedCatalogVersions() throws -> Set<Int> {
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(databaseURL.path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let database else {
+            throw SQLiteThoughtRepositoryError.open("test setup")
+        }
+        defer { sqlite3_close(database) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "SELECT DISTINCT catalog_version FROM secondbrain_default_app_seed_history", -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        var versions = Set<Int>()
+        while sqlite3_step(statement) == SQLITE_ROW {
+            versions.insert(Int(sqlite3_column_int(statement, 0)))
+        }
+        return versions
     }
 
     func tableColumns(_ table: String) throws -> Set<String> {

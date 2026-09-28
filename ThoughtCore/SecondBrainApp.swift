@@ -157,6 +157,76 @@ public protocol SecondBrainAppRepository: Sendable {
     func createApp(_ app: SecondBrainApp) throws
     func updateApp(_ app: SecondBrainApp) throws
     func deleteApp(id: UUID) throws
+    @discardableResult func seedDefaultAppsIfNeeded(now: Date) throws -> Int
+}
+
+public extension SecondBrainAppRepository {
+    @discardableResult
+    func seedDefaultAppsIfNeeded() throws -> Int {
+        try seedDefaultAppsIfNeeded(now: Date())
+    }
+}
+
+public enum SecondBrainDefaultApps {
+    public static let catalogVersion = 1
+
+    public static let sharedMemoID = UUID(uuidString: "40000000-0000-4000-8000-000000000001")!
+    public static let myWikiID = UUID(uuidString: "40000000-0000-4000-8000-000000000002")!
+    public static let studyID = UUID(uuidString: "40000000-0000-4000-8000-000000000003")!
+    public static let toolID = UUID(uuidString: "40000000-0000-4000-8000-000000000004")!
+
+    public static func all(createdAt: Date = Date()) throws -> [SecondBrainApp] {
+        try [
+            SecondBrainApp(
+                id: sharedMemoID,
+                name: "Shared Memo",
+                description: "共有メモ / 簡易メモツール",
+                icon: "note.text",
+                kind: .web,
+                launchTarget: .webURL("https://maruyamamasaya.github.io/memo-tool/shared-memo/"),
+                category: "メモ",
+                isFavorite: true,
+                sortOrder: 10,
+                createdAt: createdAt
+            ),
+            SecondBrainApp(
+                id: myWikiID,
+                name: "My Wiki",
+                description: "個人Wiki / Knowledge / 興味・情報整理",
+                icon: "books.vertical",
+                kind: .web,
+                launchTarget: .webURL("https://maruyamamasaya.github.io/my-wiki/"),
+                category: "Knowledge",
+                isFavorite: true,
+                sortOrder: 20,
+                createdAt: createdAt
+            ),
+            SecondBrainApp(
+                id: studyID,
+                name: "Study",
+                description: "学習 / 勉強用ツール",
+                icon: "graduationcap",
+                kind: .web,
+                launchTarget: .webURL("https://maruyamamasaya.github.io/study/#/"),
+                category: "学習",
+                isFavorite: false,
+                sortOrder: 30,
+                createdAt: createdAt
+            ),
+            SecondBrainApp(
+                id: toolID,
+                name: "Tool",
+                description: "個人用ユーティリティ / Tool集",
+                icon: "wrench.and.screwdriver",
+                kind: .web,
+                launchTarget: .webURL("https://maruyamamasaya.github.io/tool/"),
+                category: "ユーティリティ",
+                isFavorite: false,
+                sortOrder: 40,
+                createdAt: createdAt
+            )
+        ]
+    }
 }
 
 public enum SecondBrainAppFixtures {

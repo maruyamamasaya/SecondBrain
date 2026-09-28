@@ -2,7 +2,7 @@
 
 SecondBrainの現行iOS実装では、HumanとAI Personaを`Persona`（公開上は`Actor` alias）という単一モデルで扱います。不変UUIDを参照キー、変更可能な一意`handle`を表示用IDとし、Mentionは本文とは別にActor ID、投稿時handle snapshot、UTF-16範囲を保存します。Replyは`thought_relations.repliesTo`、Continuationは`thought_relations.continues`で独立して表現します。
 
-この文書は将来構想ではなく、2026-09-28にコードと照合した実装済み構成を記録します。Apps / Tools HubはDomain／Persistenceまでを現在構成として扱い、未実装のUI／起動処理は`NEXT_FEATURES.md`へ分離します。
+この文書は将来構想ではなく、2026-09-28にコードと照合した実装済み構成を記録します。Apps / Tools HubはDomain／Persistence／Default Catalogまでを現在構成として扱い、未実装のUI／起動処理は`NEXT_FEATURES.md`へ分離します。
 
 ## System Overview
 
@@ -80,7 +80,7 @@ SwiftUI App -> MainTabView -> Home / Mentions / AI機能 / 振り返り / Profil
 - `ThoughtRelationRepository`: Relation作成、source／target方向の1ステップ取得境界。
 - `ThoughtContinuationRepository`: 新規Thoughtと`continues` Relationを同一transactionで作成する境界。
 - `LoadConversationThread`: 現在Thoughtから両Relationを遡ってrootを求め、全node／edge、選択地点までのcurrent path、leaf、最新leafを再構築する。`ThoughtHistory`は旧Continuation表示との互換用に保持する。
-- `SQLiteThoughtRepository`: schema v21、Thought／Persona／Mention／Tag／Relation／AI生成情報／Persona別Auto Reply・Provider／Daily Summary／Weekly Summary／Weekly Plan／Apps catalog／AI Usage metadata、Knowledge Review／Quality／usage metadataとDraft FTS query、旧JSON importと2世代backupを所有する正本実装。`secondbrain_apps`は既存domain tableへの外部キーを持たず、v20→v21で空tableとして追加する。version値だけでなく実table／column／Relation制約を照合し、安全に補修可能な不足列、旧Relation制約、旧`account_id`単独UNIQUE制約は非破壊で補修する。旧PersonaはGeminiへ移行する。旧期間要約tableは既存データ互換のため維持する。
+- `SQLiteThoughtRepository`: schema v22、Thought／Persona／Mention／Tag／Relation／AI生成情報／Persona別Auto Reply・Provider／Daily Summary／Weekly Summary／Weekly Plan／Apps catalog／AI Usage metadata、Knowledge Review／Quality／usage metadataとDraft FTS query、旧JSON importと2世代backupを所有する正本実装。`secondbrain_apps`は既存domain tableへの外部キーを持たず、v20→v21で空tableとして追加する。v21→v22ではDefault Catalogの適用済みApp IDとcatalog versionを保持する`secondbrain_default_app_seed_history`を追加する。履歴にはApp tableへの外部キーを付けず、ユーザーがDefault Appを削除しても再生成しない。version値だけでなく実table／column／Relation制約を照合し、安全に補修可能な不足列、旧Relation制約、旧`account_id`単独UNIQUE制約は非破壊で補修する。旧PersonaはGeminiへ移行する。旧期間要約tableは既存データ互換のため維持する。
 - `ThoughtExporter`: Repositoryから未削除Thoughtを取得し、Markdown／JSONを生成。
 - `ShareSheet`: ExportファイルをiOS標準共有UIへ渡すUIKit bridge。
 - `ExternalBackupManager`: Filesフォルダpicker、security-scoped bookmark、バックアップ状態と確認UIのpresentation境界。
@@ -136,4 +136,4 @@ AI Personaプロフィールの接続チェッカーはAI生成clientを呼ば�
 
 現行実装が外部通信するのは、Gemini用Firebase AI Logic / App Check、OpenAI Responses API、External Brain／Knowledge用GitHub APIです。Files／iCloud Driveはユーザーが選択した保存先へのBackup / Restoreに利用します。独自バックエンド、利用者アカウント、クラウド同期、Claude生成はまだ存在しません。
 
-Apps / Toolsは`SecondBrainApp`、Repository境界、schema v21の`secondbrain_apps`まで実装済みです。サンプルAppはtest fixtureだけに存在し、本番DBをseedしません。SwiftUI画面、Native route resolution、外部URLを実際に開くapp layer、到達確認、WebViewは未実装です。App間データ共有、AIによるApp操作、Context連携はv1の範囲外です。
+Apps / Toolsは`SecondBrainApp`、Repository境界、schema v21の`secondbrain_apps`、schema v22のDefault Catalog適用履歴まで実装済みです。Default Catalog v1は固定UUIDのShared Memo／My Wiki／Study／Toolを新規・移行DBへmissing-onlyで登録します。同じIDの既存Appは変更せず履歴だけを記録し、適用済みAppの編集を上書きせず、削除後も再生成しません。catalog versionは将来追加される固定IDの判定材料として履歴へ保存します。Preview／test fixtureはDefault Catalogと分離しています。SwiftUI画面、Native route resolution、外部URLを実際に開くapp layer、到達確認、WebViewは未実装です。App間データ共有、AIによるApp操作、Context連携はv1の範囲外です。

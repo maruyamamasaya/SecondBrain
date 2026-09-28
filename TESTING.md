@@ -14,7 +14,7 @@ swift test
 
 週間振り返りは月曜〜日曜の完了週境界、Human Thought限定、Terraの`weeklySummary`／medium／8,192 token、同週Summary置換、次週Plan候補の生成時非保存／明示確定、schema v20のSQLite round-tripを`WeeklyReviewTests.swift`で検証します。
 
-Apps / Tools Hubは`SecondBrainAppTests.swift`で空名、負の表示順、不正URL、WebのHTTP、非local host、危険scheme、kind／launch target不整合を拒否し、Local WebのHTTP、External Deep Linkを許可するDomain境界を検証します。SQLiteはschema v21のCRUD、安定UUID、表示順、お気に入り、fixture非seed、既存Thoughtを保持するv20→v21 migrationを検証します。Windowsでtest codeまで実装済みですが、Swift toolchainがないため未実行です。
+Apps / Tools Hubは`SecondBrainAppTests.swift`で空名、負の表示順、不正URL、WebのHTTP、非local host、危険scheme、kind／launch target不整合を拒否し、Local WebのHTTP、External Deep Linkを許可するDomain境界を検証します。SQLiteはschema v22のCRUD、固定UUID、表示順、お気に入り、Default Catalog v1の初回seed／再実行時の非重複、ユーザー編集の保持、削除後の非再生成、URL末尾slash／query／fragmentのround-trip、既存Thoughtを保持するv20→v22／v21→v22 migration、catalog version履歴を検証します。Preview fixtureはDefault CatalogとIDが重ならないことも確認します。Windowsでtest codeまで実装済みですが、Swift toolchainがないため未実行です。
 
 Persona External Brain／External Brain Routing v1はAGENT.md解析、`{current_project}`展開、unsafe path拒否、Markdown front matter／heading chunk／draft除外、SHA差分同期・削除・offline cache、日本語自然文queryのtrigram検索、長いchunkの一致箇所周辺2,000文字excerpt、FTS route／metadata優先、最大件数、0件、AI Reply／Persona Post promptの参考資料境界とUsage metadataを`ExternalBrainTests.swift`で検証します。
 
@@ -22,11 +22,11 @@ Knowledge Draft Pipelineは5種のtype、6種のsource、front matter、safe slu
 
 Knowledge Review & Promoteは許可された状態遷移、unreviewedからの直接Promote拒否、schema v12 Draft／Knowledge round-trip、Draft FTS、Promote metadata、Draft除外とpromoted Knowledgeの即時FTS反映を`ExternalBrainTests.swift`で検証します。Review lifecycle eventはAI Usageと分離しtoken情報を持ちません。
 
-Knowledge Quality & Consolidationはschema v14で追加され、現在のschema v21でも完全一致duplicate、無関係Knowledgeの候補除外、stale条件、candidate dismiss、Knowledge本文不変、Archive／Supersede metadata、retrievalCount／lastRetrievedAtを`ExternalBrainTests.swift`で検証します。Quality解析とローカルMerge DraftはAI clientを受け取らないpure/local境界です。
+Knowledge Quality & Consolidationはschema v14で追加され、現在のschema v22でも完全一致duplicate、無関係Knowledgeの候補除外、stale条件、candidate dismiss、Knowledge本文不変、Archive／Supersede metadata、retrievalCount／lastRetrievedAtを`ExternalBrainTests.swift`で検証します。Quality解析とローカルMerge DraftはAI clientを受け取らないpure/local境界です。
 
 GitHub Repository Settingsは設定modelのCodable round-trip、secret fieldを持たないこと、Draft／Knowledge pathのdomain正本、401／403／404とrate limitの分類、AIプロフィールの接続状態で実接続成功時だけverifiedになることを`ExternalBrainTests.swift`で検証します。UserDefaults復元、Keychain保存・置換・削除、既存GitHub clientへの同一設定反映、GETだけの実接続確認、プロフィール上の緑ライトと最終確認日時はMac上のapp integration検証対象です。
 
-AI API Usage Analyticsは`AIAPIUsageTests.swift`で現在のschema v21における保存・再読込、Knowledge Draft source type、success／failure／cancel／retry、Persona有無、External Brain有無、character、実測tokenのnil保持、Latency、Error分類、今日／7日／30日／全期間と各dimension、本文系columnを持たないprivacy、Telemetry書込失敗時の生成結果維持を検証します。v13なのに追加列が欠けた既存DBを構築し、起動時の非破壊補修、該当SELECT、再実行可能性も検証します。加えて、最新versionを名乗りながら旧Relation制約を持つDBのv15自動補修と、必須table欠落をhealth checkが拒否することを検証します。生成requestについてはPersona系の`concisePersona`／low／1,024 token、Daily SummaryのOpenAI／`dailySummary`／medium、Knowledge Draftの`knowledgeDraft`／mediumが固定されることをCore testで確認します。
+AI API Usage Analyticsは`AIAPIUsageTests.swift`で現在のschema v22における保存・再読込、Knowledge Draft source type、success／failure／cancel／retry、Persona有無、External Brain有無、character、実測tokenのnil保持、Latency、Error分類、今日／7日／30日／全期間と各dimension、本文系columnを持たないprivacy、Telemetry書込失敗時の生成結果維持を検証します。v13なのに追加列が欠けた既存DBを構築し、起動時の非破壊補修、該当SELECT、再実行可能性も検証します。加えて、最新versionを名乗りながら旧Relation制約を持つDBのv15自動補修と、必須table欠落をhealth checkが拒否することを検証します。生成requestについてはPersona系の`concisePersona`／low／1,024 token、Daily SummaryのOpenAI／`dailySummary`／medium、Knowledge Draftの`knowledgeDraft`／mediumが固定されることをCore testで確認します。
 
 ## UI Test
 
@@ -72,7 +72,7 @@ Windowsで実装済み・Mac未検証の蓄積と一括実施順は`MAC_VALIDATI
 
 2026-09-14時点の最新Mac検証では、`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論errorによりtest実行前のcompileで停止します。過去の全140件成功は週間振り返り追加前のbaselineであり、blocker解消後に最新件数と結果を更新します。
 
-Apps / Tools Hub追加分の検証状態は、**Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／実機確認未実施**です。Macでは既知compile blocker解消後、全Package test、schema v20→v21 migration、既存機能回帰を一度だけ実行します。
+Apps / Tools Hub追加分の検証状態は、**Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**です。Macでは既知compile blocker解消後、全Package test、schema v20→v22／v21→v22 migration、Default Catalogのseed／編集／削除／Backup・Restore、既存機能回帰を一度だけ実行します。
 
 ```bash
 git diff --check

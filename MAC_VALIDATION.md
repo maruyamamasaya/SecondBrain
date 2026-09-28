@@ -24,25 +24,31 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] 別内容の未正式化Draftは日記画面から消えない
 - [ ] Xcode／macOS／Simulator、実施日、成功件数、失敗・残課題を`sessions/`へ追記する
 
-## 2026-09-28追加分（Apps / Tools Hub v1 Domain／Persistence）
+## 2026-09-28追加分（Apps / Tools Hub v1 Domain／Persistence／Default Catalog）
 
-状態: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／実機確認未実施**。既知のSwift 6.3 compile blockerを先に解消し、以下を順に確認する。
+状態: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**。既知のSwift 6.3 compile blockerを先に解消し、以下を順に確認する。
 
 - [ ] `ThoughtCore/ExternalBrain.swift`のSwift 6.3 compile blockerを解消する
 - [ ] `SecondBrainApp.swift`を含むSwift PackageがSwift 6.3でcompileできる
 - [ ] `swift test`で`SecondBrainAppTests`を含む全testが成功する
 - [ ] `AiTextApp.xcodeproj`のDebug Simulator buildが成功し、追加したCore fileがapp targetへ含まれる
-- [ ] schema v20 DBをv21へmigrationし、既存Thought／Persona／Knowledge／Weekly Summaryが保持される
-- [ ] 新規DBがschema v21で作成され、`secondbrain_apps` health checkと`PRAGMA integrity_check`が成功する
+- [ ] schema v20 DBをv22へmigrationし、既存Thought／Persona／Knowledge／Weekly Summaryが保持される
+- [ ] schema v21 DBをv22へmigrationし、既存App編集と既存Coreデータが保持される
+- [ ] 新規DBがschema v22で作成され、`secondbrain_apps`／`secondbrain_default_app_seed_history`のhealth checkと`PRAGMA integrity_check`が成功する
+- [ ] 新規DBへDefault Catalog v1のShared Memo／My Wiki／Study／Toolが固定UUID・指定順・指定favoriteで1回だけ登録される
+- [ ] seedを再実行してもDefault Appと履歴が重複しない
+- [ ] Default Appの名前／URL／お気に入り／表示順を編集後に再seed・再起動しても上書きされない
+- [ ] Default Appを削除後に再seed・再起動しても復活しない
+- [ ] Studyの`https://maruyamamasaya.github.io/study/#/`が保存・再読込後もfragmentを含め完全一致する
 - [ ] Appの追加／取得／更新／削除、sortOrder順、お気に入り永続化、再起動後再読込を確認する
-- [ ] sample fixtureが本番DBへ自動登録されないことを確認する
+- [ ] Preview／test fixtureのHomeMuseum／Baby Media／GitHub Monitorが本番DBへ登録されない
+- [ ] 外部完全Backup／Restore後にApps catalog、Default Catalog適用履歴、ユーザー編集、削除状態、既存Coreデータが復元される
 - [ ] Apps一覧、App名、種別、お気に入り、起動ボタン相当を確認する（UI実装後）
 - [ ] HTTPS URL起動、Local WebのHTTP／HTTPS起動、External Deep Link、Native routeを確認する（起動処理実装後）
 - [ ] 不正URL、危険scheme、公開hostをLocal Webとして登録する操作が拒否される
 - [ ] Local Webを実機から同一LANで開き、offline／到達不能時の表示を確認する
 - [ ] SwiftUIをiPhone SE相当、最新標準iPhone、Dynamic Type、Dark Mode、VoiceOverで確認する
 - [ ] WebViewを将来導入した場合だけ、navigation、認証、外部遷移、cookie／storage、閉じる操作を別途確認する。v1 Domain／PersistenceではWebView未導入
-- [ ] 外部完全Backup／Restore後にApps catalogと既存Coreデータが復元される
 - [ ] XCTestDevicesの開始時一覧・容量、新規作成数、削除数、終了時容量を記録する
 
 ## 1. Swift Package Tests
@@ -75,8 +81,8 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 
 ## 3. SQLite Migration
 
-- [ ] 新規DBがschema v13で作成され、`PRAGMA integrity_check`が`ok`になる
-- [ ] legacy JSONからschema v13へThoughtを失わず一度だけ移行する
+- [ ] 新規DBが現在のschema v22で作成され、`PRAGMA integrity_check`が`ok`になる
+- [ ] legacy JSONから現在のschema v22へThoughtを失わず一度だけ移行する
 - [ ] schema v1→v2（Relation）、v2→v3（Review Summary）、v3→v4（Tag）、v4→v5（Daily Summary）を確認する
 - [ ] schema v5→v6（Persona／Authorship）、v6→v7（AI Persona／Generation）、v7→v8（Mention）を確認する
 - [ ] schema v8→v9（AI Reply）、v9→v10（AI API Usage）を確認する
@@ -84,6 +90,11 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] schema v10→v11でAI UsageへKnowledge Draft source type columnが追加される
 - [ ] schema v11→v12でKnowledge Draft／Knowledge Document／lifecycle event／Draft FTSが追加される
 - [ ] schema v12→v13でKnowledge status／supersede／archive／retrieval usage／quality candidateが追加される
+- [ ] schema v13→v14でKnowledge Quality用の不足columnを補修できる
+- [ ] schema v14→v15でReply Relation制約、v15→v16でActor handle／Mention snapshotが追加・補修される
+- [ ] schema v16→v17でAI Persona Auto Reply、v17→v18で旧`account_id`単独UNIQUE制約が非破壊補修される
+- [ ] schema v18→v19でAI Persona provider、v19→v20でWeekly Summary／Planが追加される
+- [ ] schema v20→v21でApps catalog、v21→v22でDefault Catalog適用履歴が追加される
 - [ ] 破損legacy JSONでは移行を中止し、原本が保持される
 
 ## 4. Persona / Mention / AI Reply
@@ -122,7 +133,7 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 
 ## 8. AI API Usage Analytics
 
-- [ ] AI Reply／Daily Summary／Persona Post／Knowledge Draftの成功・失敗・cancel・retryがschema v13へ記録される
+- [ ] AI Reply／Daily Summary／Persona Post／Knowledge Draftの成功・失敗・cancel・retryが現在のschema v22へ記録される
 
 ## Knowledge Quality & Consolidation
 
@@ -132,7 +143,7 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] Candidate Dismiss後もKnowledge本文・statusが変わらず、再解析・再起動後も抑制される
 - [ ] 明示Archive／Supersedeと確認UI、履歴閲覧、通常Retrieval除外を確認する
 - [ ] active Knowledge取得時だけretrievalCount／lastRetrievedAtが更新され、詳細とRecently Usedへ反映される
-- [ ] schema v13 migration後のQuality Candidate／usage／Archive／Supersede再起動永続化を確認する
+- [ ] schema v14以降へのmigration後にQuality Candidate／usage／Archive／Supersedeの再起動永続化を確認する
 
 ## Knowledge Review & Promote
 

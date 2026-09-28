@@ -4,21 +4,21 @@
 
 ## Project
 
-`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools HubはDomainとSQLite永続化までWindowsで実装済みで、UIと起動処理は未実装です。
+`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools HubはDomain、SQLite永続化、Default Catalog v1までWindowsで実装済みで、UIと起動処理は未実装です。
 
 ## 現在のフェーズ
 
-Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistenceまでコード実装済みです。SQLite schemaはv21です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。その後追加した週間振り返りv1と日記のDraft／active二重表示修正は、2026-09-14のMac/Xcode 26.6検証で`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorによりtest／buildへ到達できていません。Apps / Tools Hub追加分もWindows実装のため未compileです。
+Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v1までコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。その後追加した週間振り返りv1と日記のDraft／active二重表示修正は、2026-09-14のMac/Xcode 26.6検証で`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorによりtest／buildへ到達できていません。Apps / Tools Hub追加分もWindows実装のため未compileです。
 
 ### 現在の検証blocker
 
 - `ExternalBrainCache.journalEntries()`内の`compactMap`で要素型を推論できず、Swift 6.3 compileが失敗する。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了。
 - 最新の検証手順と記録は`MAC_VALIDATION.md`および`sessions/2026-09-14-weekly-review-v1.md`を正本とする。このblockerを解消して検証baselineを回復するまで、最新追加分を「テスト済み」と扱わない。
-- Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／実機確認未実施**。
+- Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**。
 
 ## 実装済み
 
-- Apps / Tools Hub v1のDomain／Persistence基盤。`SecondBrainApp`はUUID、名前、説明、icon、kind、launch target、category、お気に入り、表示順、作成・更新日時を持つ。Native／Web／Local Web／Externalと起動先を分離し、HTTPS、local HTTP、危険scheme、kindとの組み合わせをDomainで検証する。schema v21の独立`secondbrain_apps` tableへCRUDを保存し、Thought関連tableとは関係を持たない。HomeMuseum／Baby Media／GitHub Monitorはtest fixtureだけにあり、本番DBへ自動登録しない。UIとURL起動は未実装。
+- Apps / Tools Hub v1のDomain／Persistence基盤。`SecondBrainApp`はUUID、名前、説明、icon、kind、launch target、category、お気に入り、表示順、作成・更新日時を持つ。Native／Web／Local Web／Externalと起動先を分離し、HTTPS、local HTTP、危険scheme、kindとの組み合わせをDomainで検証する。schema v21で独立`secondbrain_apps` tableを追加し、schema v22で`secondbrain_default_app_seed_history`を追加した。Default Catalog v1は固定UUIDのShared Memo／My Wiki／Study／Toolを不足時だけ登録する。既存項目を上書きせず、一度登録したDefault Appは削除後も履歴を残して再生成しない。Preview用fixtureとは分離し、Thought関連tableとは関係を持たない。UIとURL起動は未実装。
 
 - 日記カレンダーはPromote後もGitHubに保持される元Draftと正式版を二重表示せず、日付・title・本文が一致する`active`日記を優先する。別内容の未正式化Draftは引き続き表示し、GitHub上のファイルやKnowledge Review履歴は変更しない。
 
@@ -80,7 +80,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 - UUIDと作成・更新・削除日時を持つThought原文モデル。
 - Application Support配下のSQLiteを正本にしたローカル保存、query順序、ソフトデリート。
 - 既存JSONをtransaction内で検証して一度だけ取り込む、再実行可能なmigration。
-- `PRAGMA user_version`によるschema version管理（現在v21）。v14は実カラム補修、v15はReply Relation制約補修、v16はActor handle／Mention snapshot、v17はAI Persona Auto Reply、v18は旧`account_id`単独UNIQUE制約の非破壊補修、v19はAI Persona provider、v20は週間Summary／Plan、v21は独立したApps / Tools catalogを非破壊追加する。
+- `PRAGMA user_version`によるschema version管理（現在v22）。v14は実カラム補修、v15はReply Relation制約補修、v16はActor handle／Mention snapshot、v17はAI Persona Auto Reply、v18は旧`account_id`単独UNIQUE制約の非破壊補修、v19はAI Persona provider、v20は週間Summary／Plan、v21は独立したApps / Tools catalog、v22はDefault Catalogの登録履歴を非破壊追加する。
 - Home右上の鉛筆アイコンから開き、入力へ自動focusする投稿Composer。投稿操作はNavigation bar右上に置き、空入力や140文字超過時は無効化する。
 - Lazy Timeline、自然な相対日時、Thought本文のコピー、メニュー内削除、Empty State。Timeline・詳細・会話履歴の各操作メニューから本文全体をペーストボードへコピーできる。Home／Mentionsは初回50件だけをSQLiteから取得し、末尾到達時に50件ずつ追加取得する。追加取得は`OFFSET`ではなく作成日時とUUIDのkeyset cursorを使い、全件読込を避ける。
 - interactiveなキーボードdismiss、Dynamic Type、Dark Mode、VoiceOver向けsemantic UI。
@@ -144,7 +144,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 
 - Swift 6.3で`ThoughtCore/ExternalBrain.swift`の`compactMap`要素型を推論できず、最新の`swift test`とDebug Simulator buildがcompileで停止する。
 - schema v20の新規DB round-trip testは存在するが、明示的なschema v19 fixtureからv20へのmigration testが未追加。
-- Apps / Tools HubのDomain、SQLite CRUD、schema v20→v21 migration testは追加済みだが、Windows環境のため未実行。
+- Apps / Tools HubのDomain、SQLite CRUD、Default Catalogのmissing-only seed、削除後の非再生成、URL保持、schema v20→v22／v21→v22 migration testは追加済みだが、Windows環境のため未実行。
 - 週間振り返りと日記の最新修正はSimulatorでの画面確認が未完了。
 - Daily Summary統一後を含む最新XCUITest、Light／Dark Mode、Dynamic Type、VoiceOverの回帰確認が必要。
 - 破損した移行元JSONは自動復旧せず、SQLiteへの移行を中止してエラー表示し、原本を保持します。
@@ -152,7 +152,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 ## 次に行うこと
 
 1. Swift 6.3 compile blockerを局所修正し、`swift test`とDebug Simulator buildを回復する。
-2. schema v19→v20 migration testを追加し、追加済みのv20→v21 migration testと合わせて実行する。
+2. schema v19→v20 migration testを追加し、追加済みのv20→v22／v21→v22 migration testと合わせて実行する。
 3. `MAC_VALIDATION.md`の残項目を実施し、最新baselineを確定する。
 4. Apps / Tools一覧／編集の最小SwiftUIと、起動前確認を持つapp layerのlaunch policyをMacで実装・検証する。
 5. Release App Attestを実機確認する。配布を検討する場合はOpenAI直接接続の廃止を先に行う。

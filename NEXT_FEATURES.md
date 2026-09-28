@@ -2,7 +2,7 @@
 
 最終更新日: 2026-09-28
 
-Apps / Tools Hub v1は採用され、Domain／PersistenceをWindows先行で実装しました。この文書は残るUI／起動処理とMac検証の計画を管理します。現在の実装状態は`CURRENT.md`、実装済み構成は`ARCHITECTURE.md`を正本とします。
+Apps / Tools Hub v1は採用され、Domain／Persistence／Default Catalog v1をWindows先行で実装しました。この文書は残るUI／起動処理とMac検証の計画を管理します。現在の実装状態は`CURRENT.md`、実装済み構成は`ARCHITECTURE.md`を正本とします。
 
 ## Product Direction
 
@@ -13,17 +13,17 @@ SecondBrainはThoughtを入口として、AI、Knowledge、Insights、Apps / Too
 WindowsではiOS依存を避けてDomain／Persistenceを先行しました。Macへ戻ったら、UI実装前に現行main相当の検証可能なbaselineを回復します。
 
 1. `ExternalBrainCache.journalEntries()`のSwift 6.3型推論compile blockerを解消する。
-2. `swift test`を完走し、週間振り返り、schema v19→v20とv20→v21のmigration、日記のDraft／active重複抑制、Apps CRUD／validationを確認する。
+2. `swift test`を完走し、週間振り返り、schema v19→v20、v20→v22、v21→v22のmigration、日記のDraft／active重複抑制、Apps CRUD／validation／Default Catalog seedを確認する。
 3. Debug Simulator buildを成功させ、週間Summary／Planと日記表示を目視確認する。
 4. `MAC_VALIDATION.md`へ結果とXCTestDevicesの作成・削除・残容量を記録する。
 
-Apps / Tools Hub追加分は、**Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／実機確認未実施**です。
+Apps / Tools Hub追加分は、**Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**です。
 
 ## 次期候補の比較
 
 | 候補 | 価値 | 現在の準備度 | 主なリスク | 推奨 |
 | --- | --- | --- | --- | --- |
-| Apps / Tools Hub v1 | SecondBrainを個人用アプリHubへ広げる最小の縦切り | Domain／SQLite実装済み、UI／起動未実装 | URL起動、Local Web到達性、UI配置 | 現在進行中 |
+| Apps / Tools Hub v1 | SecondBrainを個人用アプリHubへ広げる最小の縦切り | Domain／SQLite／Default Catalog v1実装済み、UI／起動未実装 | URL起動、Local Web到達性、UI配置 | 現在進行中 |
 | AI Summary | Human限定Summaryと分離してAI側の活動を振り返る | 責務分離は既存設計に記録済み | Human／AIの意味混同、AI call増加 | 実利用ニーズ確認後 |
 | Monthly Review | Daily／Weeklyの上位振り返り | Calendar・Summary基盤を再利用可能 | Weeklyとの重複、長大prompt | Weekly実利用後 |
 | Analytics v2 | 記録から具体的な意思決定を支援する | ローカル集計基盤あり | 指標追加だけでは価値が弱い | 問いを定義できた場合のみ |
@@ -74,7 +74,7 @@ Apps UI
 - App catalogはThought、Knowledge、AI生成履歴と別tableに分離し、Repository protocolだけを共有DB実装へconformさせる。
 - `AppLaunchPolicy`は純粋なdomain判定とし、実際の`openURL`はapp layerに置く。
 - icon画像を扱う場合も初期版はアプリ内symbolまたは小さなローカルassetに限定し、remote image fetchを必須にしない。
-- App catalogは正本DBのschema v21へ追加したため、既存の完全Backup / Restore対象に含まれる。
+- App catalogはschema v21、Default Catalog適用履歴はschema v22の正本DBへ追加したため、既存の完全Backup / Restore対象に含まれる。
 
 ## UI検討
 
@@ -96,12 +96,13 @@ Apps UI
 
 ## Implementation Slices
 
-1. 完了（Mac未検証）: `SecondBrainApp`、validation、sample fixture、URL policy test。
-2. 完了（Mac未検証）: schema v21の独立SQLite table、CRUD／並び順／お気に入り、v20→v21 migration test。
-3. 次: Catalog UIの一覧、Empty State、追加／編集／削除。検索／filterはデータ量を見て追加する。
-4. 次: Native routeとExternal URLを分離し、起動前host表示と確認可能な失敗表示を追加。
-5. Accessibility / verification: Dynamic Type、VoiceOver、Dark Mode、小型iPhone、offline Local Web。
-6. 実利用後にThoughtからの共有、favorite、recentなどの次段階を判断する。
+1. 完了（Mac未検証）: `SecondBrainApp`、validation、Preview／test fixture、URL policy test。
+2. 完了（Mac未検証）: schema v21の独立SQLite table、schema v22のseed履歴、CRUD／並び順／お気に入り、v20→v22／v21→v22 migration test。
+3. 完了（Mac未検証）: 固定UUIDのShared Memo／My Wiki／Study／Toolを持つDefault Catalog v1、missing-only seed、編集保持、削除後の非再生成、URL query／fragment保持。
+4. 次: Catalog UIの一覧、Empty State、追加／編集／削除。検索／filterはデータ量を見て追加する。
+5. 次: Native routeとExternal URLを分離し、起動前host表示と確認可能な失敗表示を追加。
+6. Accessibility / verification: Dynamic Type、VoiceOver、Dark Mode、小型iPhone、offline Local Web。
+7. 実利用後にThoughtからの共有、favorite、recentなどの次段階を判断する。
 
 ## Acceptance Draft
 
@@ -117,10 +118,10 @@ Apps UI
 UI／起動実装前に未決定事項を決め、長期的な制約になる場合だけ`decisions/`へ記録します。
 
 1. Appsの入口を既存5タブのどこへ置くか。
-2. 決定済み: サンプルはtest fixtureだけに置き、本番DBを自動seedしない。ユーザー登録UIは次sliceで作る。
+2. 決定済み: Default Catalog v1の4件は固定UUIDで本番DBへmissing-only seedする。適用履歴を独立保存し、編集を上書きせず、ユーザーが削除した項目を再生成しない。Preview／test fixtureは別定義とする。
 3. 決定済み: `http`はLocal Webだけで許可し、localhost、`.local`、private／loopback／link-local IPに限定する。
 4. App iconをSF Symbolsだけに限定するか、ローカル画像を許可するか。
-5. 決定済み: schema v21の正本SQLiteへ置き、外部完全Backup / Restore対象に含める。
+5. 決定済み: catalogをschema v21、seed履歴をschema v22の正本SQLiteへ置き、外部完全Backup / Restore対象に含める。
 6. 決定済み: App IDだけを一意とし、同じtoolの複数environmentを表現できるよう重複URL／表示名を許可する。
 
 ## Design Start Checklist
@@ -128,7 +129,7 @@ UI／起動実装前に未決定事項を決め、長期的な制約になる場
 - [ ] 現行compile blockerとMac検証を完了した。
 - [ ] Open Decision 1（Apps入口）を決めた。
 - [x] SwiftUI `App`との混同を避けて`SecondBrainApp`と命名した。
-- [x] schema v21変更とv20→v21 migration testを追加した。
+- [x] schema v22変更とv20→v22／v21→v22 migration testを追加した。
 - [x] Domain保存時のURL threat modelを実装した。起動時の再検証と失敗時UXは未実装。
 - [ ] v1の画面wireframeを小型iPhone／Dynamic Type前提で確認した。
 - [ ] 実装開始時に必要なら正式なDecisionを追加した。
