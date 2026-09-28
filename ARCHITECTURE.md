@@ -1,17 +1,17 @@
 # Architecture
 
-HumanとAI Personaは`Persona`（公開上は`Actor` alias）という単一モデルで扱い、不変UUIDを参照キー、変更可能な一意`handle`を表示用IDとする。Mentionは本文とは別にActor ID、投稿時handle snapshot、UTF-16範囲を保存し、Replyは既存の`thought_relations.repliesTo`で独立して表現する。
+SecondBrainの現行iOS実装では、HumanとAI Personaを`Persona`（公開上は`Actor` alias）という単一モデルで扱います。不変UUIDを参照キー、変更可能な一意`handle`を表示用IDとし、Mentionは本文とは別にActor ID、投稿時handle snapshot、UTF-16範囲を保存します。Replyは`thought_relations.repliesTo`、Continuationは`thought_relations.continues`で独立して表現します。
 
-この文書は将来構想ではなく、2026-09-12時点でリポジトリに存在する構成を記録します。
+この文書は将来構想ではなく、2026-09-28にコードと照合した実装済み構成を記録します。Apps / Tools Hubなど未実装の候補は`NEXT_FEATURES.md`へ分離します。
 
 ## System Overview
 
 ```text
-SwiftUI App -> MainTabView -> Home / Mentions / Search / Insights / Profile
+SwiftUI App -> MainTabView -> Home / Mentions / AI機能 / 振り返り / Profile
   Home (TimelineView) -> ThoughtDetailView / Continuation Composer
   MentionsView -> Mention・Reply一覧 -> ThoughtDetailView
-  SearchTabView -> ThoughtSearchView -> ThoughtDetailView
-  InsightsView -> DailySummaryCalendarView / ThoughtAnalyticsView
+  AI機能 -> Persona / Provider / Usage / External Brain / Knowledge
+  振り返り -> Daily Summary / Weekly Review / Journal / Thought Analytics
   ProfileTabView -> ActorProfileView -> SettingsView
   SettingsView -> AIAPIUsageAnalyticsView -> LoadAIAPIUsageAnalytics
   -> ThoughtStore (presentation state)
@@ -130,3 +130,9 @@ application composition rootはローカル`GoogleService-Info.plist`を検証�
 External Brainのowner／repository／branchは`ExternalBrainManager`が既存UserDefaults keyへ保存し、Read、sync、Draft new-file-only保存、Promoteの全経路が同じ設定を参照する。PATは`ExternalBrainTokenStore`だけがKeychainへ保存し、UserDefaults、SQLite、Markdown、Usageへ渡さない。接続確認は既存`GitHubExternalBrainRemote`によるGETだけでAuthentication、Repository、Branchを検証し、repository permissionsのpush値からDraft／Knowledge capabilityを推定する。接続確認は設定保存とは独立し、失敗しても設定とローカルKnowledgeを保持する。
 
 AI Personaプロフィールの接続チェッカーはAI生成clientを呼ばない。未確認時はPersona有効化、AGENT path、Repository、Keychain token、同期済みcacheだけを端末内で判定し、明示確認時はRepositoryとBranchの2 GETだけを行う。Repository応答自体で認証とread権限を確認できるため、独立した`/user`照会は行わない。緑表示は直近の明示確認でAuthentication／Repository／Branchがすべて成功し、そのPersonaのAGENT.mdも同期済みの場合に限定する。GitHubだけ確認できてAGENT.mdが未同期なら同期が必要な橙表示とし、設定またはtoken変更時は確認結果と日時を破棄する。
+
+## Current Product Boundary
+
+現行実装が外部通信するのは、Gemini用Firebase AI Logic / App Check、OpenAI Responses API、External Brain／Knowledge用GitHub APIです。Files／iCloud Driveはユーザーが選択した保存先へのBackup / Restoreに利用します。独自バックエンド、利用者アカウント、クラウド同期、Claude生成、Apps / Tools catalogはまだ存在しません。
+
+Apps / ToolsはSecondBrainのProduct Visionに含まれますが、現時点ではdomain model、SQLite table、repository、画面、外部起動policyのいずれも未実装です。提案中の境界と安全要件は`NEXT_FEATURES.md`に記録し、採用後にのみこの文書へ移します。

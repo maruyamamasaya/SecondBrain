@@ -1,18 +1,19 @@
 # Current Project Status
 
-最終照合日: 2026-09-14
+最終照合日: 2026-09-28
 
 ## Project
 
-`AiTextApp_iOS` は、140文字以内のThoughtを端末内に残すSwiftUI製iPhoneアプリです。
+`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools Hubは構想・設計準備段階で、まだ実装されていません。
 
 ## 現在のフェーズ
 
-Phase 3-D（ローカル分析 v1）までコード実装済みです。2026-09-09にMac/Xcode 26.6でSwift Testing全60件、Firebase 12.18.0を含むDebug／Release Simulator build、Personal TeamのDebug実機向け署名buildを確認しました。XCUITest targetはcompile済みですが、Simulator serviceが起動時に停止するホスト環境障害のため実行確認は未完了です。
+Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brainまでコード実装済みです。SQLite schemaはv20です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。その後追加した週間振り返りv1と日記のDraft／active二重表示修正は、2026-09-14のMac/Xcode 26.6検証で`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorによりtest／buildへ到達できていません。
 
-### テスト待ち（2026-09-14追加分）
+### 現在の検証blocker
 
-- 週間振り返りv1と日記のDraft／active二重表示修正はWindowsで実装済みだが、Swift toolchainがないため未テスト。`MAC_VALIDATION.md`の「2026-09-14追加分」をMacで完了するまで「テスト済み」と扱わない。
+- `ExternalBrainCache.journalEntries()`内の`compactMap`で要素型を推論できず、Swift 6.3 compileが失敗する。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了。
+- 最新の検証手順と記録は`MAC_VALIDATION.md`および`sessions/2026-09-14-weekly-review-v1.md`を正本とする。このblockerを解消して検証baselineを回復するまで、最新追加分を「テスト済み」と扱わない。
 
 ## 実装済み
 
@@ -76,7 +77,7 @@ Phase 3-D（ローカル分析 v1）までコード実装済みです。2026-09-
 - UUIDと作成・更新・削除日時を持つThought原文モデル。
 - Application Support配下のSQLiteを正本にしたローカル保存、query順序、ソフトデリート。
 - 既存JSONをtransaction内で検証して一度だけ取り込む、再実行可能なmigration。
-- `PRAGMA user_version`によるschema version管理（現在v19）。v14は実カラム補修、v15はReply Relation制約補修、v16はActor handle／Mention snapshot、v17はAI Persona Auto Reply、v18は旧`account_id`単独UNIQUE制約の非破壊補修、v19はAI Persona providerを非破壊追加する。
+- `PRAGMA user_version`によるschema version管理（現在v20）。v14は実カラム補修、v15はReply Relation制約補修、v16はActor handle／Mention snapshot、v17はAI Persona Auto Reply、v18は旧`account_id`単独UNIQUE制約の非破壊補修、v19はAI Persona provider、v20は週間Summary／Planを非破壊追加する。
 - Home右上の鉛筆アイコンから開き、入力へ自動focusする投稿Composer。投稿操作はNavigation bar右上に置き、空入力や140文字超過時は無効化する。
 - Lazy Timeline、自然な相対日時、Thought本文のコピー、メニュー内削除、Empty State。Timeline・詳細・会話履歴の各操作メニューから本文全体をペーストボードへコピーできる。Home／Mentionsは初回50件だけをSQLiteから取得し、末尾到達時に50件ずつ追加取得する。追加取得は`OFFSET`ではなく作成日時とUUIDのkeyset cursorを使い、全件読込を避ける。
 - interactiveなキーボードdismiss、Dynamic Type、Dark Mode、VoiceOver向けsemantic UI。
@@ -122,59 +123,34 @@ Phase 3-D（ローカル分析 v1）までコード実装済みです。2026-09-
 ## 未実装
 
 - Release用App Attest providerのFirebase Console登録と実機通信。Debug Providerは実機で実通信とSQLite保存を確認済み。
-- AI分類など要約以外の派生情報、クラウド同期、アカウント、その他の外部連携。
+- Apps / Tools catalog、App起動policy、統合Hub UI。現時点では`App` domainや永続化tableを持たない。
+- AI側の活動だけを対象にした独立AI Summary、Monthly Review。
+- 利用者アカウント、独自バックエンド、クラウド同期、複数端末同期、Claude生成経路。
 - CI/CD、配布用の署名・bundle identifier設定。
 
-## AI要約：Release App Attest確認待ち
+## 外部APIの現在地
 
-ロードマップ5-Aはコード実装とDebug ProviderでのFirebase実接続まで確認済みです。Release App Attestの確認が残っています。
+- Gemini: Firebase AI LogicとApp Checkを使い、AI Persona投稿／返信と選択時のKnowledge Draftを生成する。Debug Providerの実機接続は確認済み。Release App AttestのFirebase Console登録と実機通信が未確認。
+- OpenAI: 個人所有端末限定の暫定構成として、Keychain保存keyからResponses APIへ直接接続する。Daily Summary、Weekly Review、Persona系、Knowledge Draftに用途別profileを適用する。配布前にバックエンド＋Secret管理へ移行する。
+- GitHub: External Brainのread／sync、Knowledge Draft保存・削除、PromoteにGitHub APIを利用する。PATはKeychainへ保存する。
+- Claude: 設定画面の未対応表示だけで、生成APIは呼ばない。
 
-1. 完了: Firebase Apple SDK 12.18.0をresolveし、3製品を含むDebug／Release buildを確認する。
-2. 完了: Git管理外の`GoogleService-Info.plist`を存在時だけapp bundleへcopyし、bundle identifier一致を確認する。
-3. 完了: Debug ProviderのDebug tokenをFirebase Consoleへ登録し、Debug buildの実機でApp Check交換を通す。
-4. 完了: Gemini実APIでAI要約を実行する。
-5. 完了: `gemini-3.7-flash`で実応答を確認する。
-6. 完了: 実機SQLiteにprovider、model、対象件数を持つ要約が保存されることを確認する。
-7. Release buildとApp Attestで実通信を確認する。
-8. 問題がなければロードマップ5-Aを完了へ変更し、結果を踏まえて5-Bの仕様を再評価する。
-
-再開指示は「AI要約の続きを進める」「Gemini連携を再開する」などを目印とし、この地点から再開します。それまではAI機能設定画面や新たなFirebase依存機能を先行実装せず、別分野の開発を優先します。
+秘密情報、用途別model、接続手順、配布前の移行条件は`OPERATIONS.md`と`decisions/0005-firebase-ai-logic-app-check.md`、`decisions/0007-personal-device-openai-keychain.md`を参照する。
 
 ## 既知の問題
 
-- iPhone SE (3rd generation, iOS 17.4)のbuildとXCUITestは確認済みですが、Light／Dark Modeの手動目視確認は未実施です。
+- Swift 6.3で`ThoughtCore/ExternalBrain.swift`の`compactMap`要素型を推論できず、最新の`swift test`とDebug Simulator buildがcompileで停止する。
+- schema v20の新規DB round-trip testは存在するが、明示的なschema v19 fixtureからv20へのmigration testが未追加。
+- 週間振り返りと日記の最新修正はSimulatorでの画面確認が未完了。
+- Daily Summary統一後を含む最新XCUITest、Light／Dark Mode、Dynamic Type、VoiceOverの回帰確認が必要。
 - 破損した移行元JSONは自動復旧せず、SQLiteへの移行を中止してエラー表示し、原本を保持します。
-- XCUITestは投稿・削除、Continuationの主要フローをiPhone SE Simulatorで確認済みです。Daily Summary統一後のUI回帰確認が必要です。
-- App iconの実画像は未設定です。
-- Phase 3-AのSwift Testing、Xcode build、XCUITest、Light／Dark Mode、Dynamic Type、VoiceOverの実機／Simulator確認はWindows環境のため未実行です。
-- Phase 3-Bのschema v4 migration、タグunit test、XCUITest、Light／Dark Mode、Dynamic Type、VoiceOverの実機／Simulator確認はWindows環境のため未実行です。
-- Phase 3-Cの期間境界、期間＋タグquery、Review概要・日別表示、AI対象差、XCUITest、各アクセシビリティ表示はWindows環境のため未実行です。
-- Phase 3-DのSwift Testing、SQLite集計SQL、timezone／時間帯境界、分析画面XCUITest、小型iPhoneでのバー表示、Dynamic Type／Dark Mode／VoiceOverはWindows環境のため未実行です。
 
 ## 次に行うこと
 
-### Xcode環境が利用可能になったら行う検証
+1. Swift 6.3 compile blockerを局所修正し、`swift test`とDebug Simulator buildを回復する。
+2. schema v19→v20 migration testを追加し、週間Summary／Planと日記表示を検証する。
+3. `MAC_VALIDATION.md`の残項目を実施し、最新baselineを確定する。
+4. Apps / Tools Hub v1のOpen Decisionsを決め、domain／URL policyの小さなspikeから開始する。
+5. Release App Attestを実機確認する。配布を検討する場合はOpenAI直接接続の廃止を先に行う。
 
-未実行項目と実施順はRepository直下の`MAC_VALIDATION.md`へ集約する。Windowsで機能を追加した場合は、Mac固有のcompile／Simulator／実機／署名確認を同ファイルへ追記してから完了とする。
-
-### 次の実装候補
-
-#### 非AIロードマップ
-
-1. Phase 3-A: Thought検索 v1 — コード実装済み／Mac確認待ち。
-2. Phase 3-B: Thoughtタグ v1 — コード実装済み／Mac確認待ち。
-3. Phase 3-C: History Review強化 v1 — 撤回。振り返り導線はDaily Summaryへ統一済み。
-4. Phase 3-E: Quick Capture／Widget — 通常投稿Composerとの重複を理由に削除済み。将来、未整理メモ用Inboxなど用途が明確に異なる場合は別機能として再設計する。
-5. Phase 3-D: ローカル分析 v1 — コード実装済み／Mac確認待ち。SQLite集計基盤と直近30日の小さな分析画面まで。
-
-Phase 3の機能追加は一度止め、次はMac検証を最優先する。3-A〜3-Dにcompile／Simulator未確認が蓄積しているためである。検証と実利用後、分析画面で具体的な意思決定が不足する場合だけ分析v2を検討する。根拠がなければPhase 4の別テーマを決める。
-
-#### AIロードマップ
-
-1. 完了: AI要約履歴画面 — 同期間の過去要約を新しい順に表示し、生成日時、対象件数、生成元を確認可能。
-2. 完了: AI要約の削除 — 要約ID単位の確認付き削除。Thought原文、別期間、他要約には影響しない。
-3. 完了: 要約対象の明示プレビュー — 期間、件数、文字数、日時順本文を確認し、確定したpayloadだけを送信する。
-4. 完了: 要約のExport — 選択した要約と安全なメタデータだけをMarkdown／JSONで個別共有する。
-5. 5-Aコード側完了／接続確認保留: Firebase AI Logic／App Checkをcomposition rootへ接続。Console、plist、Xcode build、Simulator／実機通信は上記のとおり未確認。
-6. 保留 5-B: AI機能設定画面 — 5-Aの実接続確認後に仕様を再評価する。確認前は先行実装しない。
-7. 数日間の実利用後にHistory／AI要約／バックアップ／Export運用を再評価する。
+次期候補の比較、Apps / Tools Hub v1のscope、security checklist、設計開始条件は`NEXT_FEATURES.md`を参照する。

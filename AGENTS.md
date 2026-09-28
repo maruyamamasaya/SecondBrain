@@ -9,11 +9,12 @@
 
 ## Project Context
 
-- **Project Name:** `AiTextApp_iOS`（アプリ名: `AiTextApp`、Core package名: `ThoughtCore`）。
-- **Purpose:** 140文字以内の短いThoughtを端末内に記録し、Timeline、ContinuationによるThought History、期間別Review、Export／Backup／Restoreで振り返るiPhone向けメモアプリ。
-- **Primary Stack:** Swift 5 language mode／Swift 6 package、SwiftUI、Combine、Foundation、SQLite、iOS 16以降、Xcode project + Swift Package。外部依存、外部API、認証、クラウド同期は現時点では持たない。
-- **Main Domains:** Thoughtの入力検証・Timeline・soft delete、Thought間のContinuation／History、日付範囲Review、SQLite永続化・旧JSON migration・内部／外部backup・restore、Markdown／JSON Export、iOS accessibility。
-- **Expected Work:** 上記領域のiOS UI、ドメイン／repository、データ保全、テスト、ドキュメント、運用改善。将来のAI派生情報、同期、共有など、プロダクト目的に沿う新領域も追加調査のうえ対象になり得る。
+- **Project Name:** プロダクト名は`SecondBrain`。リポジトリ／Xcode project名は`AiTextApp_iOS`、現在のアプリ表示名は`AiTextApp`、Core package名は`ThoughtCore`。
+- **Purpose:** Thoughtを中核として、人間とAI Personaの会話、振り返り、Knowledge、External Brain、個人用Apps / Toolsへの入口を統合するiPhone向け個人用AIワークスペース。Thoughtは140文字以内の短文を基本とする。
+- **Primary Stack:** Swift 5 language mode／Swift 6 package、SwiftUI、Combine、Foundation、SQLite、iOS 16以降、Xcode project + Swift Package。Firebase Apple SDKをapp targetで利用する。
+- **External Services / APIs:** GeminiはFirebase AI Logic + App Check、OpenAIは個人所有端末限定のResponses API直接接続、External Brain／KnowledgeはGitHub APIを利用する。OpenAI API keyとGitHub tokenはKeychainへ保存する。現時点で利用者アカウント、独自バックエンド、クラウド同期は持たない。Claude生成経路は未実装。
+- **Main Domains:** Thoughtの入力検証・Timeline・soft delete、Mention／Reply／Continuation／Conversation、AI Personaと生成、Daily Summary／Weekly Review／Journal、Tag／Search／Analytics、SQLite永続化・旧JSON migration・内部／外部backup・restore、Markdown／JSON Export、External Brain、Knowledge Draft／Review／Promote／Quality、iOS accessibility。
+- **Expected Work:** 上記領域のiOS UI、ドメイン／repository、外部API境界、秘密情報管理、データ保全、テスト、ドキュメント、運用改善。Apps / Tools Hub、AI派生情報、同期、共有など、SecondBrainの目的に沿う新領域も追加調査のうえ対象になり得る。
 - **Clearly Unrelated Examples:** 別製品固有のNext.js管理画面やWebゲーム、Android専用画面、別サービス固有のDB table／route、存在しない別プロジェクト名・固有class・固有directoryを前提にした変更。この例は新機能を制限するホワイトリストではない。
 
 ## Project Context Guard
@@ -112,6 +113,7 @@ iOS／macOSプロジェクトの検証では、Macのストレージ消費を最
 ## 文書の役割
 
 - `CURRENT.md`: 今どこまでできているか。
+- `NEXT_FEATURES.md`: 次期機能の候補、未決定事項、設計開始条件。
 - `ARCHITECTURE.md`: 現在システムがどう動いているか。
 - `CODEMAP.md`: どの主要コードがどこにあるか。
 - `TESTING.md`: どう検証するか。

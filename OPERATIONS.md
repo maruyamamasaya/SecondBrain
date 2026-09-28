@@ -1,5 +1,7 @@
 # Operations
 
+この文書はSecondBrainの現行iOSアプリ`AiTextApp`の開発、外部サービス、データ保全を扱います。現在利用する外部APIはFirebase AI Logic / App Check、OpenAI Responses API、GitHub APIです。Apps / Tools Hubは未実装のため、外部Appの認証情報や運用はまだ管理しません。
+
 ## Local Development
 
 `AiTextApp.xcodeproj`をFirebase AI Logicが要求するXcode 26.2以降で開き、`AiTextApp` schemeと任意のiPhone Simulatorを選んで実行します。iOS 16.0以降が対象です。通常起動はFirebaseクライアントを使い、Firebase未設定時は外部送信せず設定エラーを表示します。UIテストはMemory repositoryとMock AIクライアントを使います。

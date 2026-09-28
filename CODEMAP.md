@@ -2,6 +2,8 @@
 
 機能から主要コードへ到達するための索引です。
 
+現行コードだけを対象とします。Apps / Tools Hubは未実装で、候補domainと想定boundaryは`NEXT_FEATURES.md`にあります。
+
 ## Application Entry / UI
 
 - `AiTextApp/App/AiTextApp.swift` — SwiftUIエントリーポイント、UIテスト用composition。
