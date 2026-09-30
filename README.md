@@ -4,7 +4,7 @@ SecondBrainは、Thought・AI・Knowledge・Apps / Toolsをひとつの場所か
 
 開発は、X（旧Twitter）のTimelineのように140文字以内の短いテキストを記録するiOSアプリ`AiTextApp_iOS`から始まりました。現在はThoughtを中核として、AI Personaとの会話、振り返り、Knowledge管理、External Brain、個人用ツールへの入口を統合する方向へ発展させています。
 
-リポジトリ名とXcode projectは`AiTextApp_iOS`、現在のアプリ表示名は`AiTextApp`、Core package名は`ThoughtCore`です。`SecondBrain`はプロダクト全体の名称として扱います。
+リポジトリ名とXcode projectは`AiTextApp_iOS`、現在のアプリ表示名は`SecondBrain`、Core package名は`ThoughtCore`です。`SecondBrain`はプロダクト全体の名称として扱います。
 
 ## Concept
 

@@ -60,17 +60,18 @@ final class ThoughtStore: ObservableObject {
     @Published private(set) var dailySummary: DailySummary?
     @Published private(set) var dailySummaryPreview: DailySummaryPreview?
     @Published private(set) var isGeneratingDailySummary = false
-    @Published var dailySummaryError: String?
+    @Published var dailySummaryError: String? { didSet { if let message = dailySummaryError, message != oldValue { recordOperationError(message, scope: .dailyReview) }; if dailySummaryError == nil { operationNotices[.dailyReview] = nil } } }
     @Published private(set) var dailySummaryDayThoughts: [Thought] = []
     @Published private(set) var dailySummaryDayTags: [String] = []
     @Published private(set) var dailySummaryDayContinuationCount = 0
     @Published private(set) var weeklySummaries: [WeeklySummary] = []
+    @Published var secondBrainAppError: String?
     @Published private(set) var weeklySummary: WeeklySummary?
     @Published private(set) var weeklyPlan: WeeklyPlan?
     @Published private(set) var weeklySummaryPreview: WeeklySummaryPreview?
     @Published private(set) var weeklyPlanDraft: WeeklyPlanDraft?
     @Published private(set) var isGeneratingWeeklyReview = false
-    @Published var weeklyReviewError: String?
+    @Published var weeklyReviewError: String? { didSet { if let message = weeklyReviewError, message != oldValue { recordOperationError(message, scope: .weeklyReview) }; if weeklyReviewError == nil { operationNotices[.weeklyReview] = nil } } }
     @Published private(set) var searchResults: [Thought] = []
     @Published private(set) var hasSearchQuery = false
     @Published private(set) var tagsByThoughtID: [UUID: [ThoughtTag]] = [:]
@@ -78,7 +79,7 @@ final class ThoughtStore: ObservableObject {
     @Published private(set) var taggedThoughts: [Thought] = []
     @Published var tagMessage: String?
     @Published var deletionCandidate: Thought?
-    @Published var errorMessage: String?
+    @Published var errorMessage: String? { didSet { if let message = errorMessage, message != oldValue { recordOperationError(message, scope: .app) }; if errorMessage == nil { operationNotices[.app] = nil } } }
     @Published var exportArtifact: ExportArtifact?
     @Published private(set) var history: [ThoughtHistoryEntry] = []
     @Published private(set) var conversationThread: ConversationThread?
@@ -94,8 +95,37 @@ final class ThoughtStore: ObservableObject {
     @Published private(set) var isGeneratingKnowledgeDraft = false
     @Published private(set) var isSavingKnowledgeDraft = false
     @Published private(set) var isDeletingKnowledgeDraft = false
-    @Published var knowledgeDraftError: String?
+    @Published var knowledgeDraftError: String? { didSet { if let message = knowledgeDraftError, message != oldValue { recordOperationError(message, scope: .knowledge) }; if knowledgeDraftError == nil { operationNotices[.knowledge] = nil } } }
     @Published var knowledgeDraftMessage: String?
+    @Published private(set) var reflectionSaveStatus: String?
+    struct OperationNotice: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
+    @Published private(set) var operationNotices: [OperationErrorScope: OperationNotice] = [:]
+    @Published private(set) var errorLogRecords: [OperationErrorRecord] = []
+    @Published private(set) var errorLogReadError: String?
+    private let diagnosticLog: OperationErrorLog
+
+    func dismissOperationNotice(_ scope: OperationErrorScope) { operationNotices[scope] = nil }
+    func reloadErrorLog() {
+        do { errorLogRecords = try diagnosticLog.records(); errorLogReadError = nil }
+        catch { errorLogReadError = "エラーログを読み込めませんでした。元のログファイルは保持しています。端末の空き容量を確認してください。" }
+    }
+    private func recordOperationError(_ message: String, scope: OperationErrorScope) {
+        let category = OperationErrorCategory.classify(message)
+        let action: OperationErrorAction = isSavingKnowledgeDraft ? .save : ((isGeneratingDailySummary || isGeneratingWeeklyReview || isGeneratingKnowledgeDraft) ? .generate : .other)
+        let record = OperationErrorRecord(scope: scope, category: category, action: action)
+        let logStatus: String
+        do { try diagnosticLog.append(record); reloadErrorLog(); logStatus = "ログID: \(record.id.uuidString.prefix(8))" }
+        catch { logStatus = "エラーログも保存できませんでした。端末の空き容量を確認してください。" }
+        operationNotices[scope] = .init(title: "処理を完了できませんでした", message: "\(message)\n\n次の対応\n\(category.recovery)\n\n\(logStatus)")
+    }
+    func showOperationCompleted(_ scope: OperationErrorScope, title: String, message: String) {
+        operationNotices[scope] = .init(title: title, message: message)
+    }
+
     @Published private(set) var knowledgeDrafts: [KnowledgeDraft] = []
     @Published private(set) var knowledgeDocuments: [KnowledgeDocument] = []
     @Published private(set) var knowledgeLifecycleEvents: [KnowledgeLifecycleEvent] = []
@@ -117,6 +147,7 @@ final class ThoughtStore: ObservableObject {
     private var knowledgeLifecycleRepository: (any KnowledgeLifecycleEventRepository)?
     private var dailySummaryRepository: (any DailySummaryRepository)?
     private var weeklyReviewRepository: (any WeeklyReviewRepository)?
+    private var secondBrainAppRepository: (any SecondBrainAppRepository)?
     private var personaRepository: (any PersonaRepository)?
     private var aiPersonaRepository: (any AIPersonaRepository)?
     private var mentionRepository: (any ThoughtMentionRepository)?
@@ -148,6 +179,10 @@ final class ThoughtStore: ObservableObject {
         externalBrainManager: ExternalBrainManager? = nil,
         userDefaults: UserDefaults = .standard
     ) {
+        let logRoot = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+            ? FileManager.default.temporaryDirectory.appendingPathComponent("diagnostics-ui")
+            : (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory).appendingPathComponent("ThoughtTimeline/Diagnostics")
+        diagnosticLog = OperationErrorLog(url: logRoot.appendingPathComponent("operation-errors.json"))
         self.userDefaults = userDefaults
         aiReplyPreviewPreference = AIReplyPreviewPreference(rawValue: userDefaults.string(forKey: Self.aiReplyPreviewPreferenceKey) ?? "") ?? .skip
         let savedKnowledgeProvider = userDefaults.string(forKey: Self.knowledgeDraftAIProviderKey)
@@ -173,6 +208,7 @@ final class ThoughtStore: ObservableObject {
             knowledgeLifecycleRepository = repository as? any KnowledgeLifecycleEventRepository
             dailySummaryRepository = repository as? any DailySummaryRepository
             weeklyReviewRepository = repository as? any WeeklyReviewRepository
+            secondBrainAppRepository = repository as? any SecondBrainAppRepository
             personaRepository = repository as? any PersonaRepository
             aiPersonaRepository = repository as? any AIPersonaRepository
             mentionRepository = repository as? any ThoughtMentionRepository
@@ -190,6 +226,7 @@ final class ThoughtStore: ObservableObject {
             if let aiPersonaRepository { aiConfigurations = try aiPersonaRepository.fetchAIConfigurations() }
             dailySummaries = try dailySummaryRepository?.fetchDailySummaries(from: .distantPast, to: .distantFuture) ?? []
             weeklySummaries = try weeklyReviewRepository?.fetchWeeklySummaries() ?? []
+            secondBrainApps = try secondBrainAppRepository?.fetchAllApps() ?? []
             knowledgeDrafts = try knowledgeDraftRepository?.fetchKnowledgeDrafts() ?? []; knowledgeDocuments = try knowledgeDraftRepository?.fetchKnowledgeDocuments() ?? []
             if let sqliteRepository = repository as? SQLiteThoughtRepository {
                 backupManager = ExternalBackupManager(repository: sqliteRepository)
@@ -204,6 +241,39 @@ final class ThoughtStore: ObservableObject {
         refreshReplyRelations(for: thoughts.map(\.id))
         loadAllTags()
         if let startupError { errorMessage = startupError }
+    }
+
+    func saveSecondBrainApp(_ app: SecondBrainApp, isNew: Bool) -> Bool {
+        guard let secondBrainAppRepository else {
+            secondBrainAppError = "Apps / Toolsを保存できませんでした。"
+            return false
+        }
+        do {
+            if isNew { try secondBrainAppRepository.createApp(app) }
+            else { try secondBrainAppRepository.updateApp(app) }
+            secondBrainApps = try secondBrainAppRepository.fetchAllApps()
+            secondBrainAppError = nil
+            return true
+        } catch {
+            secondBrainAppError = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteSecondBrainApp(id: UUID) -> Bool {
+        guard let secondBrainAppRepository else {
+            secondBrainAppError = "Apps / Toolsを削除できませんでした。"
+            return false
+        }
+        do {
+            try secondBrainAppRepository.deleteApp(id: id)
+            secondBrainApps = try secondBrainAppRepository.fetchAllApps()
+            secondBrainAppError = nil
+            return true
+        } catch {
+            secondBrainAppError = error.localizedDescription
+            return false
+        }
     }
 
     func saveOpenAIAPIKey(_ apiKey: String) -> Bool {
@@ -503,6 +573,48 @@ final class ThoughtStore: ObservableObject {
         personasByThoughtID[thought.id]?.kind == .human
     }
 
+    struct PendingReview: Identifiable {
+        enum Kind { case daily, weekly }
+        let kind: Kind
+        let interval: DateInterval
+        let id: String
+        var title: String { kind == .daily ? "デイリー振り返り" : "週間振り返り" }
+        var period: String {
+            let start = JapaneseCalendarFormatting.day(interval.start)
+            return kind == .daily ? start : "\(start)〜\(JapaneseCalendarFormatting.day(interval.end.addingTimeInterval(-1)))"
+        }
+    }
+
+    func pendingReviews(now: Date = Date(), calendar: Calendar = .current) -> [PendingReview] {
+        guard let thoughtRepository, let dailySummaryRepository, let weeklyReviewRepository,
+              errorMessage == nil else { return [] }
+        var calendar = calendar
+        calendar.firstWeekday = 2
+        let today = calendar.startOfDay(for: now)
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return [] }
+        let intervals: [(PendingReview.Kind, DateInterval)] = [
+            (.daily, DateInterval(start: yesterday, end: today)),
+            (.weekly, WeeklyReviewPeriod.completedWeek(before: now, calendar: calendar))
+        ]
+        return intervals.compactMap { kind, interval in
+            // Calendar dates keep a skipped period stable across timezone changes.
+            let parts = calendar.dateComponents([.year, .month, .day], from: interval.start)
+            let id = "reviewPrompt.\(kind).\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+            guard !userDefaults.bool(forKey: id) else { return nil }
+            do {
+                let saved = kind == .daily
+                    ? try dailySummaryRepository.fetchDailySummary(dayStart: interval.start) != nil
+                    : try weeklyReviewRepository.fetchWeeklySummary(weekStart: interval.start) != nil
+                guard !saved, !(try thoughtRepository.fetchHumanThoughts(from: interval.start, to: interval.end)).isEmpty else { return nil }
+                return PendingReview(kind: kind, interval: interval, id: id)
+            } catch { return nil }
+        }
+    }
+
+    func skipReviewPrompt(_ review: PendingReview) {
+        userDefaults.set(true, forKey: review.id)
+    }
+
     func loadDailySummary(for day: Date, calendar: Calendar = .current) {
         let start = calendar.startOfDay(for: day)
         do {
@@ -534,6 +646,7 @@ final class ThoughtStore: ObservableObject {
     func cancelDailySummaryPreview() { dailySummaryPreview = nil }
 
     func generateDailySummary(from preview: DailySummaryPreview) async {
+        guard !isGeneratingDailySummary else { return }
         guard let thoughtRepository, let dailySummaryRepository else { dailySummaryError = "保存先を利用できません。"; return }
         isGeneratingDailySummary = true; dailySummaryError = nil
         defer { isGeneratingDailySummary = false }
@@ -574,6 +687,7 @@ final class ThoughtStore: ObservableObject {
     }
 
     func generateWeeklySummary(from preview: WeeklySummaryPreview, calendar: Calendar = .current) async {
+        guard !isGeneratingWeeklyReview else { return }
         guard let thoughtRepository, let weeklyReviewRepository else { weeklyReviewError = "保存先を利用できません。"; return }
         isGeneratingWeeklyReview = true; weeklyReviewError = nil
         defer { isGeneratingWeeklyReview = false }
@@ -589,6 +703,7 @@ final class ThoughtStore: ObservableObject {
     }
 
     func generateWeeklyPlanDraft(from summary: WeeklySummary) async {
+        guard !isGeneratingWeeklyReview else { return }
         isGeneratingWeeklyReview = true; weeklyReviewError = nil
         defer { isGeneratingWeeklyReview = false }
         do { weeklyPlanDraft = try await GenerateWeeklyPlanDraft(client: summaryClient, usageRepository: aiUsageRepository)(summary: summary) }
@@ -773,7 +888,137 @@ final class ThoughtStore: ObservableObject {
             let path = try await externalBrainManager.saveDraft(draft)
             var saved = draft; saved.savedPath = path; saved.syncStatus = .synced; saved.updatedAt = Date(); try knowledgeDraftRepository?.saveKnowledgeDraft(saved); knowledgeDraft = saved; loadKnowledge()
             knowledgeDraftMessage = "保存しました\n\(path)"
+            showOperationCompleted(.knowledge, title: "保存が完了しました", message: "GitHubへの下書き保存が完了しました。")
         } catch { var failed=draft; failed.syncStatus = .failed; failed.updatedAt=Date(); try? knowledgeDraftRepository?.saveKnowledgeDraft(failed); knowledgeDraft = failed; knowledgeDraftError = error.localizedDescription; loadKnowledge() }
+    }
+
+    func savedReflection(for date: Date, weekly: Bool = false) -> KnowledgeDraft? {
+        let sourceID = "reflection:\(weekly ? "weekly" : "daily"):\(KnowledgeDraftPath.dateString(date))"
+        return knowledgeDrafts.first { $0.provenance.sourceID == sourceID }
+    }
+
+    func reflectionDraft(for summary: DailySummary, reuseSaved: Bool = true) -> KnowledgeDraft {
+        let sourceID = "reflection:daily:\(KnowledgeDraftPath.dateString(summary.dayStart))"
+        loadKnowledge()
+        let existing = knowledgeDrafts.first(where: { $0.provenance.sourceID == sourceID })
+        if reuseSaved, let existing { return existing }
+        let c = summary.content
+        var sections = ["# デイリー振り返り", "## 概要\n\(c.overview)"]
+        func add(_ title: String, _ values: [String]) {
+            if !values.isEmpty { sections.append("## \(title)\n" + values.map { "- \($0)" }.joined(separator: "\n")) }
+        }
+        add("主なテーマ", c.themes)
+        for group in c.tagGroups { sections.append("## タグ: \(group.tagName)\n\(group.summary)\n" + group.themes.map { "- \($0)" }.joined(separator: "\n")) }
+        add("思考パターン", c.thoughtPatterns); add("深掘りしていた内容", c.deepDives); add("悩み・検討", c.concerns)
+        sections.append("## 思考の流れ\n\(c.thoughtFlow)")
+        for insight in c.timeOfDayInsights { sections.append("## \(insight.period)\n\(insight.insight)") }
+        add("継続候補", c.continuationCandidates); add("明日以降への持ち越し", c.carryOvers)
+        if var existing { existing.body = sections.joined(separator: "\n\n"); return existing }
+        return KnowledgeDraft(title: "\(JapaneseCalendarFormatting.day(summary.dayStart))の振り返り", type: .projectNote, source: .dailySummary, createdAt: summary.dayStart, body: sections.joined(separator: "\n\n"), provenance: .init(sourceID: sourceID, dailySummaryDate: summary.dayStart))
+    }
+
+    func reflectionDraft(for summary: WeeklySummary, reuseSaved: Bool = true) -> KnowledgeDraft {
+        let sourceID = "reflection:weekly:\(KnowledgeDraftPath.dateString(summary.weekStart))"
+        loadKnowledge()
+        let existing = knowledgeDrafts.first(where: { $0.provenance.sourceID == sourceID })
+        if reuseSaved, let existing { return existing }
+        let c = summary.content
+        var sections = ["# 週間振り返り", "対象: \(JapaneseCalendarFormatting.day(summary.weekStart))〜\(JapaneseCalendarFormatting.day(summary.weekEnd.addingTimeInterval(-1)))", "## 概要\n\(c.overview)"]
+        for (title, values) in [("主なテーマ", c.themes), ("変化", c.changes), ("繰り返した話題", c.recurringTopics), ("思考の進展", c.thoughtDevelopments), ("印象的なThought", c.notableThoughts), ("未解決の問い", c.unresolvedQuestions)] {
+            if !values.isEmpty { sections.append("## \(title)\n" + values.map { "- \($0)" }.joined(separator: "\n")) }
+        }
+        if var existing { existing.body = sections.joined(separator: "\n\n"); return existing }
+        return KnowledgeDraft(title: "\(JapaneseCalendarFormatting.day(summary.weekStart))からの週間振り返り", type: .projectNote, source: .manual, createdAt: summary.weekStart, body: sections.joined(separator: "\n\n"), provenance: .init(sourceID: sourceID))
+    }
+
+    @discardableResult
+    func saveReflection(_ draft: KnowledgeDraft) async -> Bool {
+        guard !isSavingKnowledgeDraft, let repository = knowledgeDraftRepository, ReflectionSave.supports(draft) else { return false }
+        isSavingKnowledgeDraft = true; knowledgeDraftError = nil; knowledgeDraftMessage = nil
+        reflectionSaveStatus = "この端末に保存しています…"
+        defer { isSavingKnowledgeDraft = false; reflectionSaveStatus = nil }
+        var value = draft
+        value.updatedAt = Date(); value.syncStatus = .localOnly
+        value.knowledgePath = ReflectionSave.path(for: value)
+        // Freeze the destination when first attempting a configured repository.
+        if value.provenance.reflectionRepository == nil, externalBrainManager.repository.isConfigured {
+            value.provenance.reflectionRepository = ReflectionSave.repositoryIdentity(externalBrainManager.repository)
+        }
+        do { try repository.saveKnowledgeDraft(value) }
+        catch { knowledgeDraftError = "端末に保存できなかったため、GitHubには送信しませんでした。"; return false }
+        knowledgeDraft = value; loadKnowledge()
+        reflectionSaveStatus = value.knowledgeSHA == nil ? "GitHubへ反映しています…" : "GitHubの内容を更新しています…"
+        do {
+            let sha = try await externalBrainManager.saveReflection(value)
+            value.knowledgeSHA = sha; value.syncStatus = .synced; value.reviewStatus = .promoted
+            value.approvedAt = value.approvedAt ?? Date(); value.promotedAt = value.promotedAt ?? Date()
+            try repository.saveKnowledgeDraft(value)
+            knowledgeDraft = value; loadKnowledge()
+            knowledgeDraftMessage = "この端末とGitHubに保存しました。"
+            showOperationCompleted(.knowledge, title: draft.knowledgeSHA == nil ? "保存が完了しました" : "更新が完了しました", message: "この端末とGitHubへの反映が完了しました。")
+            return true
+        } catch {
+            value.syncStatus = .failed
+            try? repository.saveKnowledgeDraft(value)
+            knowledgeDraft = value; loadKnowledge()
+            knowledgeDraftError = "端末に保存済み・GitHubへの送信待ちです。\n\(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func localJournalEntries() -> [ExternalBrainJournalEntry] {
+        knowledgeDrafts.filter { $0.type == .journal && $0.reviewStatus != .rejected }.map { draft in
+            ExternalBrainJournalEntry(path: draft.knowledgePath ?? draft.savedPath ?? "local:\(draft.id.uuidString)", title: draft.title, body: draft.body, date: KnowledgeDraftPath.dateString(draft.createdAt), status: draft.knowledgePath == nil ? "draft" : (draft.syncStatus == .synced ? "active" : "pending"))
+        }
+    }
+
+    func duplicateJournalCount(for draft: KnowledgeDraft) -> Int {
+        guard draft.type == .journal else { return 0 }
+        let ownPaths = Set([draft.knowledgePath, draft.savedPath, "local:\(draft.id.uuidString)"].compactMap { $0 })
+        let day = KnowledgeDraftPath.dateString(draft.createdAt)
+        let body = JournalDuplicateDetection.normalizedBody(draft.body)
+        guard !body.isEmpty else { return 0 }
+        return journalEntries().filter {
+            $0.date == day && !ownPaths.contains($0.path) && JournalDuplicateDetection.normalizedBody($0.body) == body
+        }.count
+    }
+
+    func relatedReflectionCount(for date: Date, weekly: Bool = false) -> Int {
+        let sourceID = "reflection:\(weekly ? "weekly" : "daily"):\(KnowledgeDraftPath.dateString(date))"
+        return knowledgeDrafts.filter { draft in
+            if draft.provenance.sourceID == sourceID { return true }
+            return !weekly && draft.type != .journal && draft.source == .dailySummary && draft.provenance.dailySummaryDate.map { Calendar.current.isDate($0, inSameDayAs: date) } == true
+        }.count
+    }
+
+    func editableJournal(_ entry: ExternalBrainJournalEntry) -> KnowledgeDraft? {
+        if let draft = knowledgeDrafts.first(where: { ($0.knowledgePath ?? $0.savedPath ?? "local:\($0.id.uuidString)") == entry.path }) { return draft }
+        let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = .current; formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: entry.date) else { return nil }
+        var draft = KnowledgeDraft(title: entry.title, type: .journal, source: .manual, createdAt: date, body: entry.body, provenance: .init(journalDate: date))
+        // Imported journals retain their original metadata, including AI source and custom fields.
+        if let markdown = externalBrainManager.cachedMarkdown(path: entry.path) {
+            let lines = markdown.components(separatedBy: .newlines)
+            if lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---") {
+                draft.provenance.reflectionFrontMatter = lines[1..<end].joined(separator: "\n")
+            }
+        }
+        if entry.status == "active" {
+            guard (try? KnowledgeDocumentPath.validate(entry.path)) != nil, let sha = externalBrainManager.manifest.files[entry.path]?.sha else { return nil }
+            draft.knowledgePath = entry.path; draft.knowledgeSHA = sha
+            draft.provenance.reflectionRepository = ReflectionSave.repositoryIdentity(externalBrainManager.repository)
+            draft.syncStatus = .synced; draft.reviewStatus = .promoted
+        } else if entry.status == "draft" { draft.savedPath = entry.path }
+        return draft
+    }
+
+    func journalEntries() -> [ExternalBrainJournalEntry] {
+        let local = localJournalEntries()
+        let paths = Set(local.map(\.path))
+        let retainedDrafts = Set(knowledgeDrafts.filter { $0.type == .journal && $0.knowledgePath != nil }.compactMap(\.savedPath))
+        let remote = externalBrainManager.journalEntries().filter { !paths.contains($0.path) && !retainedDrafts.contains($0.path) }
+        return ExternalBrainJournalDisplay.preferringActive(local + remote)
     }
 
     func cancelKnowledgeDraft() { knowledgeDraft = nil; knowledgeDraftError = nil; knowledgeDraftMessage = nil }

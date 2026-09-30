@@ -1,6 +1,6 @@
 # Operations
 
-この文書はSecondBrainの現行iOSアプリ`AiTextApp`の開発、外部サービス、データ保全を扱います。現在利用する外部APIはFirebase AI Logic / App Check、OpenAI Responses API、GitHub APIです。Apps / Tools Hubはcatalogと起動UIまで実装済みですが、外部Appの認証情報は保存・管理しません。
+この文書はSecondBrainの現行iOSアプリ`SecondBrain`の開発、外部サービス、データ保全を扱います。現在利用する外部APIはFirebase AI Logic / App Check、OpenAI Responses API、GitHub APIです。Apps / Tools Hubはcatalogと起動UIまで実装済みですが、外部Appの認証情報は保存・管理しません。
 
 ## Local Development
 
@@ -66,3 +66,15 @@ Daily Summaryはアプリ内の日別振り返りとしてSQLiteと外部完全�
 再インストール後はバックアップ管理の「バックアップから復元」から、`AiText Backup`、その親フォルダ、または`latest`／`previous`世代を選べます。アプリはmanifest形式、backup形式version、安全な相対ファイル名、symlink、SQLite存在・サイズ・SHA-256、open、integrity、schemaを検証した後にだけ確認画面を出します。「復元する」でApplication Supportのpending領域へcopy・再検証し、この時点では現DBを変更しません。
 
 アプリを終了して次回起動すると、Repository接続前に現DBとWAL／SHMをrollback用へ退避し、pending DBを適用・再確認します。失敗時は退避した現DB一式を戻してエラーを表示します。検証または適用に失敗した場合はアプリを削除せず、外部backupの`previous`を選ぶか、バックアップフォルダの利用可能状態を確認してください。
+
+## 日記・振り返りの保存
+
+日記／デイリー・週間振り返りは編集画面の「保存する」で、端末保存後に設定済みGitHubへ送る。初回はUUID付きactive Markdownを`projects/aitextapp/knowledge/`に作り、再保存は同じpathを既知SHA付きで更新する。別途の承認・正式化・同期操作は不要。通常Knowledgeは従来どおり承認・正式化する。
+
+失敗時は送信待ちとして端末へ残る。日記はカレンダー、振り返りは対象日／週またはサマリー一覧から「編集・保存する」で再送する。GitHubを外部で編集した場合は衝突として保留する。保存先を変更した場合は元のowner／repository／branchへ戻して再送する。自動的に別保存先へ移したり、外部編集を上書きしたりはしない。
+
+## エラーログと重複候補
+
+設定 > エラーログから、端末保存された最新200件の日時・処理・操作・分類・ログIDを確認する。保存場所はApplication Support/ThoughtTimeline/Diagnostics/operation-errors.json。本文、prompt、response、キー、Tokenは含まない。SQLite backupとは別の端末内診断ファイルであり、クラウドへ自動送信しない。
+
+失敗時はポップアップの「次の対応」に従い、必要ならログIDで該当記録を確認する。重複候補は日記詳細に表示され、同日の日記追加／同本文の保存前に確認する。自動削除は行わない。

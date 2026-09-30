@@ -130,6 +130,64 @@ struct GitHubExternalBrainKnowledgeWriter: ExternalBrainKnowledgeWriter {
     }
 }
 
+/// SHA条件付き更新と、応答を失った保存の同一内容再送を扱う専用境界。
+protocol ReflectionWriting: Sendable {
+    func save(path: String, markdown: String, expectedSHA: String?, configuration: ExternalBrainRepositoryConfiguration, token: String) async throws -> String
+}
+
+struct GitHubReflectionWriter: ReflectionWriting {
+    private struct File: Decodable { let sha: String; let content: String? }
+    private struct Body: Encodable { let message, content, branch: String; let sha: String? }
+    private struct Response: Decodable { let content: File }
+
+    func save(path: String, markdown: String, expectedSHA: String?, configuration: ExternalBrainRepositoryConfiguration, token: String) async throws -> String {
+        try KnowledgeDocumentPath.validate(path)
+        guard configuration.isConfigured else { throw ExternalBrainDraftWriteError.invalidResponse }
+        guard !token.isEmpty else { throw ExternalBrainDraftWriteError.tokenMissing }
+        let encoded = path.split(separator: "/").map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }.joined(separator: "/")
+        guard let url = URL(string: "https://api.github.com/repos/\(configuration.owner)/\(configuration.repository)/contents/\(encoded)"),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw ExternalBrainDraftWriteError.invalidResponse }
+        components.queryItems = [URLQueryItem(name: "ref", value: configuration.branch)]
+        guard let readURL = components.url else { throw ExternalBrainDraftWriteError.invalidResponse }
+        func request(_ url: URL, method: String) -> URLRequest {
+            var value = URLRequest(url: url); value.httpMethod = method; value.timeoutInterval = 30
+            value.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            value.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            value.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            return value
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request(readURL, method: "GET"))
+            let status = (response as? HTTPURLResponse)?.statusCode
+            var sha: String?
+            if status == 200 {
+                let file = try JSONDecoder().decode(File.self, from: data)
+                let content = file.content.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
+                switch try ReflectionSave.writeAction(remoteSHA: file.sha, remoteContent: content, desiredContent: Data(markdown.utf8), expectedSHA: expectedSHA) {
+                case .alreadySaved(let savedSHA): return savedSHA
+                case .update(let currentSHA): sha = currentSHA
+                case .create: break
+                }
+            } else if status == 404 {
+                _ = try ReflectionSave.writeAction(remoteSHA: nil, remoteContent: nil, desiredContent: Data(markdown.utf8), expectedSHA: expectedSHA)
+            } else if status == 401 || status == 403 { throw ExternalBrainDraftWriteError.permissionDenied }
+            else { throw ExternalBrainDraftWriteError.invalidResponse }
+            var write = request(url, method: "PUT")
+            write.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            write.httpBody = try JSONEncoder().encode(Body(message: "Save reflection \(path)", content: Data(markdown.utf8).base64EncodedString(), branch: configuration.branch, sha: sha))
+            let (result, written) = try await URLSession.shared.data(for: write)
+            switch (written as? HTTPURLResponse)?.statusCode {
+            case 200, 201: return try JSONDecoder().decode(Response.self, from: result).content.sha
+            case 401, 403: throw ExternalBrainDraftWriteError.permissionDenied
+            case 409, 422: throw ReflectionSaveError.conflict
+            default: throw ExternalBrainDraftWriteError.invalidResponse
+            }
+        } catch let error as ExternalBrainDraftWriteError { throw error }
+        catch let error as ReflectionSaveError { throw error }
+        catch { throw ExternalBrainDraftWriteError.network }
+    }
+}
+
 enum ExternalBrainTokenStore {
     private static let service = "AiTextApp.ExternalBrain.GitHub"
     static func save(_ token: String) throws {
@@ -162,13 +220,14 @@ final class ExternalBrainManager: ObservableObject {
     private let remote: any ExternalBrainRemote
     private let draftWriter: any ExternalBrainDraftWriter
     private let knowledgeWriter: any ExternalBrainKnowledgeWriter
+    private let reflectionWriter: any ReflectionWriting
     private let connectionTester: any GitHubRepositoryConnectionTesting
     private let repositoryKey = "externalBrain.repository.v1", personaKey = "externalBrain.personas.v1"
     private let excludedPathsKey = "externalBrain.excludedKnowledgePaths.v1"
     private var excludedKnowledgePaths: Set<String>
 
-    init(rootURL: URL, defaults: UserDefaults = .standard, remote: any ExternalBrainRemote = GitHubExternalBrainRemote(), draftWriter: any ExternalBrainDraftWriter = GitHubExternalBrainDraftWriter(), knowledgeWriter: any ExternalBrainKnowledgeWriter = GitHubExternalBrainKnowledgeWriter(), connectionTester: any GitHubRepositoryConnectionTesting = GitHubExternalBrainRemote()) {
-        self.defaults = defaults; self.remote = remote; self.draftWriter = draftWriter; self.knowledgeWriter = knowledgeWriter; self.connectionTester = connectionTester; excludedKnowledgePaths = Set(defaults.stringArray(forKey:"externalBrain.excludedKnowledgePaths.v1") ?? [])
+    init(rootURL: URL, defaults: UserDefaults = .standard, remote: any ExternalBrainRemote = GitHubExternalBrainRemote(), draftWriter: any ExternalBrainDraftWriter = GitHubExternalBrainDraftWriter(), knowledgeWriter: any ExternalBrainKnowledgeWriter = GitHubExternalBrainKnowledgeWriter(), connectionTester: any GitHubRepositoryConnectionTesting = GitHubExternalBrainRemote(), reflectionWriter: any ReflectionWriting = GitHubReflectionWriter()) {
+        self.defaults = defaults; self.remote = remote; self.draftWriter = draftWriter; self.knowledgeWriter = knowledgeWriter; self.reflectionWriter = reflectionWriter; self.connectionTester = connectionTester; excludedKnowledgePaths = Set(defaults.stringArray(forKey:"externalBrain.excludedKnowledgePaths.v1") ?? [])
         repository = defaults.data(forKey: repositoryKey).flatMap { try? JSONDecoder().decode(ExternalBrainRepositoryConfiguration.self, from: $0) } ?? .init()
         personaConfigurations = defaults.data(forKey: personaKey).flatMap { try? JSONDecoder().decode([UUID: PersonaExternalBrainConfiguration].self, from: $0) } ?? [:]
         cache = try? ExternalBrainCache(rootURL: rootURL); manifest = cache?.manifest() ?? .init()
@@ -220,11 +279,23 @@ final class ExternalBrainManager: ObservableObject {
         cache?.journalEntries(date: KnowledgeDraftPath.dateString(day)) ?? []
     }
     func journalEntries() -> [ExternalBrainJournalEntry] { cache?.journalEntries() ?? [] }
+    func cachedMarkdown(path: String) -> String? { try? cache?.markdown(at: path) }
     func saveDraft(_ draft: KnowledgeDraft) async throws -> String {
         let path = draft.targetPath; try KnowledgeDraftPath.validate(path)
         guard let token = ExternalBrainTokenStore.load(), !token.isEmpty else { throw ExternalBrainDraftWriteError.tokenMissing }
         try await draftWriter.createDraft(path: path, markdown: draft.markdown, configuration: repository, token: token)
         return path
+    }
+    func saveReflection(_ draft: KnowledgeDraft) async throws -> String {
+        guard ReflectionSave.supports(draft) else { throw ExternalBrainDraftWriteError.invalidResponse }
+        let configuration = repository
+        guard configuration.isConfigured else { throw ReflectionSaveError.repositoryMissing }
+        guard draft.provenance.reflectionRepository == ReflectionSave.repositoryIdentity(configuration) else { throw ReflectionSaveError.repositoryChanged }
+        let sha = try await reflectionWriter.save(path: ReflectionSave.path(for: draft), markdown: ReflectionSave.markdown(for: draft), expectedSHA: draft.knowledgeSHA, configuration: configuration, token: ExternalBrainTokenStore.load() ?? "")
+        // A cache failure must not turn a successful GitHub write into a failure.
+        try? cache?.storePromotedKnowledge(path: ReflectionSave.path(for: draft), sha: sha, markdown: ReflectionSave.markdown(for: draft))
+        manifest = cache?.manifest() ?? manifest
+        return sha
     }
     func deleteDraft(path: String) async throws {
         try KnowledgeDraftPath.validate(path)

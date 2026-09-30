@@ -81,3 +81,17 @@ Search: `ThoughtRepository|ThoughtRelationRepository|createContinuation|SQLiteTh
 - `AiTextApp/App/TimelineView.swift` — Settings内GitHub Repository編集、Token置換・削除、Repository変更警告、接続結果・保存path・External Brain状態表示。
 - `AiTextAppUITests/ThoughtFlowUITests.swift` — 投稿、削除、検索、タグ追加・Timeline表示・絞り込み・Detail遷移、Continuation、History、Reviewの主要UI flow。
 - `Package.swift` — `swift test`用manifest。
+
+## 日記・振り返りの簡単保存
+
+- `ThoughtCore/ExternalBrain.swift`内`ReflectionSave` — 対象境界、UUID付き固定path、active Markdown、SHA更新／再送判定、保存先識別。
+- `AiTextApp/App/ExternalBrainManager.swift`内`GitHubReflectionWriter`／`saveReflection` — Contents GET＋SHA条件付きPUTと即時cache反映。
+- `ThoughtStore.saveReflection`／`reflectionDraft`／`journalEntries` — 端末先行保存、失敗後保持、生成済みSummaryの編集版、日記の端末・cache統合。
+- `TimelineView.swift`内`ReflectionEditorView`／`SavedReflectionSection` — 共通の確認・編集・保存画面と保存済み本文。
+- `DailySummaryView.swift`／`WeeklyReviewView.swift` — 生成後の編集画面遷移、既存サマリー保存、日記作成・編集・送信待ち。
+
+## 操作結果・エラーログ・重複候補
+
+- `ThoughtCore/ExternalBrain.swift` — OperationErrorCategory／Record／Logの分類・永続化・200件保持、JournalDuplicateDetection。
+- `ThoughtStore` — エラー通知と診断記録、完了通知、日記の重複件数・同期間の振り返り記録件数。
+- `TimelineView.swift` — OperationFeedbackModifier、設定から開くOperationErrorLogView、日記追加・保存前確認、生成／保存完了表示。

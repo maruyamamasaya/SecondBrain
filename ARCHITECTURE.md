@@ -140,3 +140,21 @@ AI Personaプロフィールの接続チェッカーはAI生成clientを呼ば�
 現行実装が外部通信するのは、Gemini用Firebase AI Logic / App Check、OpenAI Responses API、External Brain／Knowledge用GitHub APIです。Files／iCloud Driveはユーザーが選択した保存先へのBackup / Restoreに利用します。独自バックエンド、利用者アカウント、クラウド同期、Claude生成はまだ存在しません。
 
 Apps / Toolsは`SecondBrainApp`、Repository境界、schema v21の`secondbrain_apps`、schema v22のDefault Catalog適用履歴、SwiftUIの3列タイル画面、Native route resolution、外部URLを開くapp layerまで実装済みです。Default Catalog v2は固定UUIDのShared Memo／My Wiki／Study／Study App／Toolを新規・移行DBへmissing-onlyで登録します。v1適用済みDBには新しいStudy Appだけを追加します。同じIDの既存Appは変更せず履歴だけを記録し、適用済みAppの編集を上書きせず、削除後も再生成しません。catalog versionは追加時点を履歴へ保存します。Preview／test fixtureはDefault Catalogと分離しています。Catalog編集UI、到達確認、WebViewは未実装です。App間データ共有、AIによるApp操作、Context連携はv1の範囲外です。
+
+## 日記・振り返りの簡単保存（2026-10-01）
+
+`ReflectionEditorView`は日記と生成済みデイリー／週間サマリーを編集可能なMarkdownとして提示する。サマリーのAI生成結果自体は従来のDaily／Weekly tableへ保持し、編集版は既存Knowledge Draft repositoryへ独立保存する。生成の再実行後は編集画面で新しい本文を確認し、明示保存するまで既存GitHubファイルを変更しない。
+
+`ThoughtStore.saveReflection`は端末保存を先行し、GitHubへ失敗しても本文・固定path・既知SHA・送信待ちを保持する。`GitHubReflectionWriter`はGETで内容／SHAを確認してからPUTし、既知SHAが一致する更新だけを許可する。同一内容なら書き直さず成功として扱い、応答喪失後の再送を可能にする。保存先owner／repo／branchをprovenanceのoptional JSON fieldへ固定し、別保存先への誤更新を防ぐ。SQLite schemaはv22を維持する。
+
+簡単保存は通常KnowledgeのReview／Promoteとは分離し、既存Draftのsync・knowledge path／SHA欄を使用する。成功時はactive Markdownをcacheへ即時反映する。通常Knowledgeの承認・正式化とKnowledgeDocument管理は変更しない。日記の閲覧は端末の最新本文を優先し、同じpathのcacheや保持された旧Draftを重複表示しない。
+
+既存cacheから取り込んだ日記を編集する場合は、元front matterをprovenanceへ保持し、title／status以外の生成元・project・custom metadataを保存時にも維持する。
+
+## 操作結果と診断ログ
+
+ThoughtStoreのDaily／Weekly／Knowledge／一般エラーをOperationNoticeへ変換し、現在の画面にoperationFeedbackを適用する。ポップアップには次の対応とログIDを表示し、同じエラーの親画面・子Sheetによる重複表示を避ける。生成成功は編集画面の完了表示、GitHub保存／更新成功は完了ポップアップで知らせる。
+
+OperationErrorLogはApplication Support/ThoughtTimeline/Diagnostics/operation-errors.jsonへatomicに最新200件を保持する。APIはUUID、日時、処理scope、操作action、固定分類categoryのみを受け取り、本文・自由記述・HTTP応答・認証情報・ユーザーpathを記録しない。破損ログを勝手に上書きせず、ログ保存／読込失敗も表示する。SQLite schema変更なし。
+
+JournalDuplicateDetectionは同日・空でない正規化本文が一致する別pathを重複候補とする。異なる日や本文は重複と断定しない。同日の日記追加と同本文の保存はユーザーが確認して続行でき、記録を自動削除しない。

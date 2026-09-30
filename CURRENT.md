@@ -1,22 +1,37 @@
 # Current Project Status
 
-最終照合日: 2026-09-30
+最終照合日: 2026-10-01
 
 ## Project
 
-`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools HubはDomain、SQLite永続化、Default Catalog v2に加えて、3列タイルUIと起動処理までWindowsで実装済みです。
+`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`SecondBrain`と、Core package `ThoughtCore`です。Apps / Tools HubはDomain、SQLite永続化、Default Catalog v2に加えて、3列タイルUIと起動処理までWindowsで実装済みです。
 
 ## 現在のフェーズ
 
-Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v2／3列タイルUIまでコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。週間振り返りv1と日記のDraft／active二重表示修正で発生した`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorは2026-09-18に修正し、Debug実機buildとVesperaへの上書き導入・起動を確認しました。2026-09-30のToolsタブ／振り返り導線とDefault Catalog v2追加分はWindows実装のため未compile・未テスト・未デプロイです。
+Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v2／3列タイルUIまで実装済みです。SQLite schemaはv22です。2026-09-30に最新`origin/main`（`01122e1`）を取り込み、既存のMac検証修正と一覧・編集UIを統合しました。Swift Testing全155件が成功し、Vespera向けDebug署名build・上書き導入・起動も確認済みです。
 
 ### 現在の検証状況
 
-- 週間振り返りv1と日記のDraft／active二重表示修正はWindowsで実装済み。日記cacheの型推論エラー修正後にDebug実機buildとVesperaでの起動を確認した。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了であり、`MAC_VALIDATION.md`の「2026-09-14追加分」をMacで完了するまで、機能全体は「テスト済み」と扱わない。
-- 最新の検証手順と記録は`MAC_VALIDATION.md`、`sessions/2026-09-14-weekly-review-v1.md`、`sessions/2026-09-18-vespera-signing-build.md`を正本とする。
-- Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing・UI Test未実施／Simulator未確認／Vesperaへのデプロイ未実施**。
+- エラー／完了通知と重複確認を追加。Core全164件、エラー時の次の対応・ログID、反映中／保存・更新完了、同日の日記追加前確認のUIテストが成功。 最終版をVesperaへ上書き導入し起動成功を確認。
+
+- 日記・振り返りの簡単保存を実装し、Core全159件と専用UIテスト2件が成功。Vespera向けDebug署名build、既存アプリへの上書きinstall、devicectl起動成功を確認。実GitHubとの保存・更新通信は未確認。
+
+- 2026-10-01に表示名SecondBrain・抽象デジタルAppIcon・起動時の振り返り案内を含むDebug署名buildをVesperaへ上書き導入し、devicectl起動成功を確認。画面操作の目視確認は未実施。
+
+- 全16件のXCUITestを実行し、失敗した旧期待を修正しました。投稿後のNavigationStack再生成に伴うクラッシュはHomeのNavigationPathリセットへ変更し、返信・AI会話・5タブ遷移の再検証に成功しています。
+- Toolsタブの5件のDefault Catalog、振り返り導線、Apps / Tools追加・起動確認、4テーマ表示をSimulatorで確認済みです。
+- 生成を伴う週間画面・日記の手動確認、実URL／Local Web／Deep Linkの実遷移、Accessibilityは未確認です。
+- 最新記録は`sessions/2026-09-30-latest-sync-test-deploy.md`を参照してください。
 
 ## 実装済み
+
+- 日記・振り返りのエラー時に原因、次の対応、ログIDをポップアップ表示。生成完了は編集画面のチェック付き表示、保存／更新完了は完了ポップアップで知らせる。設定 > エラーログで、端末へ永続化した最新200件の日時・処理・操作・分類を確認できる。本文・prompt・response・キー・Tokenをログへ記録しない。同じ日の日記作成前と同じ本文の保存前に確認し、日記詳細で複数件／同本文の重複候補を表示。振り返りは対象日／週を元にした複数記録を通知し、既存記録を更新することを編集画面で明示する。自動削除なし。
+
+- 生成中・端末保存中・GitHubへの反映中／更新中を進捗表示し、実行中の保存／生成／キャンセル・入力を無効化する。生成処理側にも多重実行guardを追加。
+
+- 日記／デイリー・週間振り返りの保存を「作る → 確認・編集 → 保存」に統一。生成済み振り返りは追加AI callなしでMarkdown編集へ進み、明示保存で端末へ先に保持してGitHubのactiveファイルへ反映する。保存済み内容は閲覧画面にも反映し、日記カレンダーには端末の下書き・送信待ちも表示する。既存日記は一覧から編集・再送でき、通常Knowledgeの承認／正式化操作は維持する。ファイル名はUUIDを含み、再保存は既知SHAで同じpathを更新する。外部編集・保存先変更は自動上書きせず送信待ちで保持。
+
+- 起動／バックグラウンドからの復帰時に、前日と直近の完了週についてHuman Thoughtがありサマリー未作成なら振り返り作成を案内する。期間別のスキップをUserDefaultsへ保存し、手動作成は維持する。「あとで」は次回起動／復帰で再案内する。案内・判定ではAI通信を行わず、対象画面の既存送信確認を使う。
 
 - Apps / Tools Hub v1。`SecondBrainApp`はUUID、名前、説明、icon、kind、launch target、category、お気に入り、表示順、作成・更新日時を持つ。Native／Web／Local Web／Externalと起動先を分離し、HTTPS、local HTTP、危険scheme、kindとの組み合わせをDomainで検証する。schema v21で独立`secondbrain_apps` tableを追加し、schema v22で`secondbrain_default_app_seed_history`を追加した。Default Catalog v2は固定UUIDのShared Memo／My Wiki／Study／Study App／Toolを不足時だけ登録する。v1適用済みDBには`https://study-app-maruyama.maruyama-001.chatgpt.site/`を開くStudy Appだけを追加し、既存のStudyとMy Wikiを含む既存項目は上書きしない。一度登録したDefault Appは削除後も履歴を残して再生成しない。下部の「ツール」タブはcatalogを3列の正方形タイルで表示し、Web／Local Web／Externalは検証済みURL、Nativeは対応画面を開く。Preview用fixtureとは分離し、Thought関連tableとは関係を持たない。
 
@@ -24,7 +39,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 
 - 週間振り返りv1。完了した月曜〜日曜のHuman Thoughtだけを対象に、`gpt-5.6-terra`／medium／最大8,192 tokenで週間サマリーを明示生成する。過去の理解と次週の意思決定を分離し、次週プランはTerra／low／最大4,096 tokenで候補を作り、ユーザーが編集・確定した場合だけ保存する。schema v20の独立tableへ週単位で保存し、サマリー再生成成功時だけ同週を置換し、確定済みPlanは自動変更しない。振り返りの週間入口とサマリー閲覧一覧へ接続済み。
 
-- デイリーサマリーなどから作るGitHub下書きの保存名に永続UUIDを追加。同日・同タイトルでも別下書きは衝突せず、保存済みの旧pathは維持する。既存ファイルの上書き禁止は継続する。未昇格Draftは詳細画面の確認付き削除から消せる。GitHub保存済みの場合はGitHub上のファイル削除に成功してからローカル記録も削除し、失敗時はローカル記録を保持する。
+- デイリーサマリーなどから作るGitHub下書きの保存名に永続UUIDを追加。同日・同タイトルでも別下書きは衝突せず、保存済みの旧pathは維持する。通常Knowledge Draftの既存ファイル上書き禁止は継続する。日記／振り返りの専用保存では既知SHAによる更新を許可する。未昇格Draftは詳細画面の確認付き削除から消せる。GitHub保存済みの場合はGitHub上のファイル削除に成功してからローカル記録も削除し、失敗時はローカル記録を保持する。
 - Daily Summaryの日別画面に「日記を作る」を追加し、その日のHuman Thoughtから日付を維持したjournal Draftを直接生成する。日記の閲覧はDaily Summaryから分離し、振り返りの独立した日記カレンダーで行う。GitHub同期済みの`type: journal`を`created`日付でカレンダーへ表示し、日別詳細で本文・状態・pathを読める。GitHub同期も日記カレンダーから実行できる。
 - デイリーサマリーと日記のカレンダーは、端末言語に依存せず月・曜日・日付を日本語で表示する。日記本文はGitHub上のMarkdownを変更せず、閲覧画面で見出し、箇条書き、引用、インライン強調を読みやすい表示へ変換し、GitHub pathは折りたたんで表示する。
 

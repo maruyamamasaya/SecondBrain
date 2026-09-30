@@ -371,3 +371,110 @@ private func temporaryBrain() throws -> (URL, ExternalBrainCache) {
     saved.title = "編集後"
     #expect(saved.targetPath == saved.savedPath)
 }
+
+@Suite("日記・振り返りの簡単保存")
+struct ReflectionSaveTests {
+    @Test func updatesRequireKnownSHAAndRetriesAreIdempotent() throws {
+        let body = Data("新しい本文".utf8)
+        #expect(try ReflectionSave.writeAction(remoteSHA: nil, remoteContent: nil, desiredContent: body, expectedSHA: nil) == .create)
+        #expect(try ReflectionSave.writeAction(remoteSHA: "old", remoteContent: Data("旧本文".utf8), desiredContent: body, expectedSHA: "old") == .update("old"))
+        #expect(try ReflectionSave.writeAction(remoteSHA: "new", remoteContent: body, desiredContent: body, expectedSHA: "old") == .alreadySaved("new"))
+        #expect(throws: ReflectionSaveError.conflict) { try ReflectionSave.writeAction(remoteSHA: "other", remoteContent: Data("外部編集".utf8), desiredContent: body, expectedSHA: "old") }
+        #expect(throws: ReflectionSaveError.conflict) { try ReflectionSave.writeAction(remoteSHA: "existing", remoteContent: Data("別の内容".utf8), desiredContent: body, expectedSHA: nil) }
+        #expect(throws: ReflectionSaveError.conflict) { try ReflectionSave.writeAction(remoteSHA: nil, remoteContent: nil, desiredContent: body, expectedSHA: "deleted") }
+    }
+
+    @Test func uniqueStablePathAndFrontMatterOnlyChange() throws {
+        var draft = KnowledgeDraft(title: "日記", type: .journal, source: .manual, body: "本文\nstatus: draft\n大切な記録")
+        let path = ReflectionSave.path(for: draft)
+        try KnowledgeDocumentPath.validate(path)
+        #expect(path != ReflectionSave.path(for: KnowledgeDraft(title: "日記", type: .journal, source: .manual, body: "別の記録")))
+        draft.knowledgePath = path; draft.title = "変更後"
+        #expect(ReflectionSave.path(for: draft) == path)
+        let parsed = MarkdownFrontMatterParser.parse(ReflectionSave.markdown(for: draft))
+        #expect(parsed.body.contains("status: draft"))
+        #expect(ReflectionSave.markdown(for: draft).contains("\nstatus: active\n"))
+        #expect(!ReflectionSave.supports(KnowledgeDraft(title: "知識", type: .knowledge, source: .manual, body: "本文")))
+    }
+
+    @Test func importedJournalPreservesSourceAndCustomMetadata() {
+        var draft = KnowledgeDraft(title: "編集後の日記", type: .journal, source: .manual, body: "編集した本文")
+        draft.provenance.reflectionFrontMatter = "title: 古いタイトル\ntype: journal\nsource: persona-post\nproject: original\ncustom: keep-me\nstatus: active"
+        let markdown = ReflectionSave.markdown(for: draft)
+        #expect(markdown.contains("source: persona-post"))
+        #expect(markdown.contains("custom: keep-me"))
+        #expect(markdown.contains("project: original"))
+        #expect(!markdown.contains("古いタイトル"))
+        #expect(MarkdownFrontMatterParser.parse(markdown).body.trimmingCharacters(in: .whitespacesAndNewlines) == "編集した本文")
+    }
+
+    @Test func pendingAndSyncedStateSurviveSQLiteReopen() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("reflection-save-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("db.sqlite3")
+        var draft = KnowledgeDraft(title: "通信失敗した日記", type: .journal, source: .dailyThoughts, createdAt: Date(timeIntervalSince1970: 1_800_000_000), body: "失われない本文")
+        draft.knowledgePath = ReflectionSave.path(for: draft)
+        draft.provenance.reflectionRepository = "owner/repo@main"
+        draft.syncStatus = .failed
+        try SQLiteThoughtRepository(databaseURL: url).saveKnowledgeDraft(draft)
+        let reopened = try SQLiteThoughtRepository(databaseURL: url)
+        #expect(try reopened.fetchKnowledgeDraft(id: draft.id) == draft)
+        draft.knowledgeSHA = "saved-sha"; draft.reviewStatus = .promoted; draft.syncStatus = .synced
+        try reopened.saveKnowledgeDraft(draft)
+        #expect(try SQLiteThoughtRepository(databaseURL: url).fetchKnowledgeDraft(id: draft.id) == draft)
+        // Old provenance JSON remains readable after adding the optional destination binding.
+        let old = try JSONDecoder().decode(KnowledgeDraftProvenance.self, from: Data("{}".utf8))
+        #expect(old.reflectionRepository == nil)
+    }
+}
+
+@Suite("端末のエラーログ")
+struct OperationErrorLogTests {
+    @Test func retainedBoundedAndContainsOnlyDiagnosticFields() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("error-log-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("errors.json")
+        let log = OperationErrorLog(url: url)
+        for index in 0..<205 {
+            try log.append(.init(occurredAt: Date(timeIntervalSince1970: Double(index)), scope: .knowledge, category: .network, action: .save))
+        }
+        let restored = try OperationErrorLog(url: url).records()
+        #expect(restored.count == 200)
+        #expect(restored.first?.occurredAt == Date(timeIntervalSince1970: 5))
+        #expect(restored.last?.action == .save)
+        let objects = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [[String: Any]]
+        #expect(Set(objects[0].keys) == Set(["id", "occurredAt", "scope", "category", "action"]))
+    }
+    @Test func corruptedLogIsPreserved() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("corrupt-log-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bytes = Data("corrupted".utf8)
+        try bytes.write(to: url)
+        #expect(throws: (any Error).self) { try OperationErrorLog(url: url).append(.init(scope: .dailyReview, category: .service)) }
+        #expect(try Data(contentsOf: url) == bytes)
+    }
+    @Test func categoriesProvideNextSteps() {
+        #expect(OperationErrorCategory.classify("端末に保存できなかったため、GitHubには送信しませんでした。") == .storage)
+        #expect(OperationErrorCategory.classify("GitHubの保存先を設定してから再送してください。") == .settings)
+        #expect(OperationErrorCategory.classify("GitHub側で内容が変更されています。") == .conflict)
+        #expect(OperationErrorCategory.network.recovery.contains("再送"))
+        #expect(OperationErrorCategory.stale.recovery.contains("プレビュー"))
+    }
+}
+
+@Suite("日記の重複表示")
+struct JournalDuplicateDetectionTests {
+    @Test func sameDaySameBodyIsFlaggedEvenWithDifferentTitles() {
+        let first = ExternalBrainJournalEntry(path: "a.md", title: "日記", body: "同じ\n本文", date: "2026-10-01", status: "active")
+        let second = ExternalBrainJournalEntry(path: "b.md", title: "別タイトル", body: " 同じ 本文 ", date: "2026-10-01", status: "pending")
+        #expect(JournalDuplicateDetection.groups([first, second]).first?.count == 2)
+        #expect(JournalDuplicateDetection.groups([first, first]).isEmpty)
+    }
+    @Test func differentDaysOrDifferentBodyRemainDistinct() {
+        let first = ExternalBrainJournalEntry(path: "a.md", title: "日記", body: "本文", date: "2026-10-01", status: "active")
+        let otherDay = ExternalBrainJournalEntry(path: "b.md", title: "日記", body: "本文", date: "2026-10-02", status: "active")
+        let otherBody = ExternalBrainJournalEntry(path: "c.md", title: "日記", body: "別の本文", date: "2026-10-01", status: "active")
+        #expect(JournalDuplicateDetection.groups([first, otherDay, otherBody]).isEmpty)
+    }
+}

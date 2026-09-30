@@ -8,3 +8,11 @@
 - ソースコード、設定、端末内データは変更・削除していない。既存の未コミット変更もそのまま保持した。
 - `swift test`はcompileに成功し145件を実行したが、週間振り返りのSQLite round-trip 1件と既存DB migration 3件が失敗した（計5 issue）。migration 3件は`weekly_summaries already exists`、round-trip 1件はWeekly Summary／Planの等価比較失敗。今回のExternal Brain型推論修正とは別領域のため、この作業では変更していない。
 - UI test／Simulatorは実行していない。新規XCTestDevices 0件、削除0件。
+
+## リモート同期後の再デプロイ
+
+- `origin/main`の更新を取り込んだ`main`（`c284c49`）を対象に、Vespera向けDebug実機buildを実行した。
+- bundle ID `com.example.AiTextApp`、arm64、Team Identifier `U29GY347DY`の署名済み成果物を確認した。
+- 既存アプリを削除せずVesperaへ上書きインストールし、`devicectl`で起動成功を確認した。
+- build時に既存のSwift warningは出たが、build errorはなかった。Unit test、UI test、Simulator testは実行していない。
+- 新規XCTestDevices 0件、削除0件。

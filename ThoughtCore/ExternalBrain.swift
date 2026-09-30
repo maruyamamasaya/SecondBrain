@@ -502,6 +502,8 @@ public struct KnowledgeDraftProvenance: Codable, Equatable, Sendable {
     public var sourceID: String?, personaID: UUID?, conversationID: UUID?, dailySummaryDate: Date?, journalDate: Date?
     public var sourceKnowledgeIDs: [UUID]?, sourcePaths: [String]?
     public var mergeReason: String?
+    public var reflectionRepository: String? = nil
+    public var reflectionFrontMatter: String? = nil
     public init(sourceID: String? = nil, personaID: UUID? = nil, conversationID: UUID? = nil, dailySummaryDate: Date? = nil, journalDate: Date? = nil, sourceKnowledgeIDs: [UUID]? = nil, sourcePaths: [String]? = nil, mergeReason: String? = nil) { self.sourceID = sourceID; self.personaID = personaID; self.conversationID = conversationID; self.dailySummaryDate = dailySummaryDate; self.journalDate = journalDate; self.sourceKnowledgeIDs = sourceKnowledgeIDs; self.sourcePaths = sourcePaths; self.mergeReason = mergeReason }
 }
 
@@ -753,3 +755,126 @@ public protocol ExternalBrainKnowledgeWriter: Sendable { func createKnowledge(pa
 
 private extension JSONEncoder { static var externalBrain: JSONEncoder { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; e.outputFormatting = [.prettyPrinted, .sortedKeys]; return e } }
 private extension JSONDecoder { static var externalBrain: JSONDecoder { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d } }
+
+public enum ReflectionSaveError: Error, LocalizedError, Equatable {
+    case conflict, repositoryChanged, repositoryMissing
+    public var errorDescription: String? {
+        switch self {
+        case .conflict: "GitHub側で内容が変更されています。上書きせず、端末の内容を保持しました。"
+        case .repositoryChanged: "以前の保存先とGitHub設定が異なります。元の保存先設定に戻して再送してください。"
+        case .repositoryMissing: "GitHubの保存先を設定してから再送してください。"
+        }
+    }
+}
+
+/// 日記と振り返りの明示保存。通常Knowledgeの承認フローとは分離する。
+public enum ReflectionSave {
+    public static func supports(_ draft: KnowledgeDraft) -> Bool {
+        draft.type == .journal || draft.provenance.sourceID?.hasPrefix("reflection:") == true
+    }
+    public static func path(for draft: KnowledgeDraft) -> String {
+        draft.knowledgePath ?? "\(KnowledgeDocumentPath.directory)/\(KnowledgeDraftPath.dateString(draft.createdAt))-reflection-\(draft.id.uuidString.lowercased()).md"
+    }
+    public static func markdown(for draft: KnowledgeDraft) -> String {
+        if let original = draft.provenance.reflectionFrontMatter {
+            var lines = original.components(separatedBy: .newlines)
+            lines.removeAll { $0.hasPrefix("title:") || $0.hasPrefix("status:") }
+            lines.append("title: \(KnowledgeDraftMarkdown.yamlScalar(draft.title))")
+            lines.append("status: active")
+            return "---\n" + lines.joined(separator: "\n") + "\n---\n\n" + draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let markdown = draft.markdown
+        // Only change the front matter status; preserve user text verbatim.
+        guard let range = markdown.range(of: "\nstatus: draft\n") else { return markdown }
+        return markdown.replacingCharacters(in: range, with: "\nstatus: active\n")
+    }
+    public enum WriteAction: Equatable, Sendable { case create, update(String), alreadySaved(String) }
+    public static func writeAction(remoteSHA: String?, remoteContent: Data?, desiredContent: Data, expectedSHA: String?) throws -> WriteAction {
+        guard let remoteSHA else {
+            guard expectedSHA == nil else { throw ReflectionSaveError.conflict }
+            return .create
+        }
+        if remoteContent == desiredContent { return .alreadySaved(remoteSHA) }
+        guard expectedSHA == remoteSHA else { throw ReflectionSaveError.conflict }
+        return .update(remoteSHA)
+    }
+    public static func repositoryIdentity(_ configuration: ExternalBrainRepositoryConfiguration) -> String {
+        "\(configuration.owner.lowercased())/\(configuration.repository.lowercased())@\(configuration.branch)"
+    }
+}
+
+public enum OperationErrorScope: String, Codable, Sendable { case app, dailyReview, weeklyReview, knowledge }
+public enum OperationErrorCategory: String, Codable, Sendable {
+    case settings, permission, conflict, network, storage, limit, stale, empty, service
+    public static func classify(_ message: String) -> Self {
+        if message.contains("端末に保存でき") || message.contains("整合性") || message.contains("保存先を利用") { return .storage }
+        if message.contains("未設定") || message.contains("設定されていません") || message.contains("保存先を設定") { return .settings }
+        if message.contains("権限") || message.contains("認証") || message.contains("App Check") { return .permission }
+        if message.contains("GitHub側で") || message.contains("同名") || message.contains("以前の保存先") { return .conflict }
+        if message.contains("上限") || message.contains("429") { return .limit }
+        if message.contains("Thoughtが変更") { return .stale }
+        if message.contains("0件") || message.contains("Thoughtがありません") { return .empty }
+        if message.contains("接続") || message.contains("通信") { return .network }
+        return .service
+    }
+    public var recovery: String {
+        switch self {
+        case .settings: "設定画面でAIまたはGitHubの設定を確認し、元の画面からもう一度実行してください。"
+        case .permission: "設定画面でキーやToken・アクセス権を確認してから再試行してください。"
+        case .conflict: "GitHubの変更内容と保存先設定を確認してください。自動上書きは行いません。端末に残した内容を保持して確認してください。"
+        case .network: "通信状態を確認し、少し待ってから再試行してください。送信待ちの記録は「保存する」で再送できます。"
+        case .storage: "端末の空き容量を確認して再試行してください。入力画面を保持し、保存できるまでアプリを削除しないでください。"
+        case .limit: "時間をおいて再試行してください。連続して押す必要はありません。"
+        case .stale: "一度プレビューを閉じ、最新のThoughtで作成し直してください。"
+        case .empty: "対象期間に自分のThoughtを記録してから作成してください。"
+        case .service: "少し待ってから元の画面で再試行してください。繰り返し失敗する場合は、設定のエラーログを確認してください。"
+        }
+    }
+}
+
+/// Body, title, prompt, remote response, tokens, paths are never accepted by the log API.
+public enum OperationErrorAction: String, Codable, Sendable { case generate, save, other }
+
+public struct OperationErrorRecord: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public let occurredAt: Date
+    public let scope: OperationErrorScope
+    public let category: OperationErrorCategory
+    public let action: OperationErrorAction
+    public init(id: UUID = UUID(), occurredAt: Date = Date(), scope: OperationErrorScope, category: OperationErrorCategory, action: OperationErrorAction = .other) {
+        self.id = id; self.occurredAt = occurredAt; self.scope = scope; self.category = category; self.action = action
+    }
+}
+
+public final class OperationErrorLog: @unchecked Sendable {
+    private let url: URL
+    private let lock = NSLock()
+    public static let maximumRecords = 200
+    public init(url: URL) { self.url = url }
+    public func records() throws -> [OperationErrorRecord] { try lock.withLock { try read() } }
+    public func append(_ record: OperationErrorRecord) throws {
+        try lock.withLock {
+            var records = try read(); records.append(record)
+            records = Array(records.suffix(Self.maximumRecords))
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(records).write(to: url, options: .atomic)
+        }
+    }
+    private func read() throws -> [OperationErrorRecord] {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        return try JSONDecoder().decode([OperationErrorRecord].self, from: Data(contentsOf: url))
+    }
+}
+
+public enum JournalDuplicateDetection {
+    /// Only flag the same day's nonempty body; different journals remain valid entries.
+    public static func groups(_ entries: [ExternalBrainJournalEntry]) -> [[ExternalBrainJournalEntry]] {
+        let grouped = Dictionary(grouping: entries.filter { !normalizedBody($0.body).isEmpty }) {
+            $0.date + "\u{1F}" + normalizedBody($0.body)
+        }
+        return grouped.values.filter { Set($0.map(\.path)).count > 1 }.sorted { $0[0].date < $1[0].date }
+    }
+    public static func normalizedBody(_ body: String) -> String {
+        body.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+}

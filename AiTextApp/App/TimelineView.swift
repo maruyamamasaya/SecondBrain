@@ -8,12 +8,16 @@ struct MainTabView: View {
     @State private var selection: Tab = .home
     @State private var navigationResetID = UUID()
 
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var pendingReviews: [ThoughtStore.PendingReview] = []
+    @State private var showsReviewPrompt = false
+    @State private var checkedThisActivation = false
+
     private enum Tab: Hashable { case home, mentions, ai, tools, profile }
 
     var body: some View {
         TabView(selection: $selection) {
             TimelineView(store: store)
-                .id(navigationResetID)
                 .tabItem { Label("ホーム", systemImage: "house") }
                 .tag(Tab.home)
                 .accessibilityIdentifier("homeTab")
@@ -43,15 +47,79 @@ struct MainTabView: View {
                 .accessibilityIdentifier("profileTab")
         }
         .tint(theme.colors.accent)
+        .onAppear { checkReviews() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background { checkedThisActivation = false }
+            if phase == .active { checkReviews() }
+        }
+        .sheet(isPresented: $showsReviewPrompt) {
+            NavigationStack {
+                List {
+                    Section {
+                        Text("未作成の振り返りがあります。作成しますか？")
+                    }
+                    ForEach(pendingReviews) { review in
+                        Section(review.title) {
+                            Text(review.period)
+                            NavigationLink("作成する") {
+                                reviewDestination(review)
+                            }
+                            Button("この期間をスキップ") {
+                                store.skipReviewPrompt(review)
+                                pendingReviews.removeAll { $0.id == review.id }
+                                if pendingReviews.isEmpty { showsReviewPrompt = false }
+                            }
+                            .accessibilityIdentifier("skipReviewPrompt_\(review.id)")
+                        }
+                    }
+                    Section {
+                        Text("スキップしても、振り返り画面からいつでも作成できます。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("振り返りを作成しますか？")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("あとで") { showsReviewPrompt = false }
+                    }
+                }
+            }
+        }
+
         .onChange(of: store.postNavigationRequest?.id) { _ in
             guard let request = store.postNavigationRequest else { return }
             let wasAlreadyOnHome = selection == .home
             selection = .home
-            if request.resetsNavigation || !wasAlreadyOnHome {
+            if !wasAlreadyOnHome {
                 navigationResetID = UUID()
             }
         }
     }
+    private func checkReviews() {
+        guard !checkedThisActivation, !showsReviewPrompt else { return }
+        checkedThisActivation = true
+        pendingReviews = store.pendingReviews()
+        showsReviewPrompt = !pendingReviews.isEmpty
+    }
+
+    @ViewBuilder
+    private func reviewDestination(_ review: ThoughtStore.PendingReview) -> some View {
+        switch review.kind {
+        case .daily:
+            DailySummaryDetailView(store: store, day: review.interval.start)
+        case .weekly:
+            WeeklyReviewDetailView(store: store, interval: review.interval, calendar: reviewCalendar)
+        }
+    }
+
+    private var reviewCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        calendar.locale = Locale(identifier: "ja_JP")
+        return calendar
+    }
+
 }
 
 struct TimelineView: View {
@@ -63,6 +131,7 @@ struct TimelineView: View {
     @State private var selectedAuthorID: UUID?
     @State private var hidesLaterReplies = true
     @State private var searchQuery = ""
+    @State private var navigationPath = NavigationPath()
 
     private var visibleThoughts: [Thought] {
         if store.hasSearchQuery {
@@ -78,7 +147,7 @@ struct TimelineView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -133,6 +202,9 @@ struct TimelineView: View {
                     }
                 }
                 .onChange(of: store.postNavigationRequest?.id) { _ in
+                    if store.postNavigationRequest?.resetsNavigation == true {
+                        navigationPath = NavigationPath()
+                    }
                     guard let thoughtID = store.postNavigationRequest?.thoughtID else { return }
                     focusOnPostedThought(thoughtID, proxy: proxy)
                 }
@@ -234,7 +306,7 @@ struct TimelineView: View {
             .alert("エラー", isPresented: errorIsPresented) {
                 Button("OK") { store.errorMessage = nil }
             } message: {
-                Text(store.errorMessage ?? "")
+                Text(store.operationNotices[.app]?.message ?? store.errorMessage ?? "")
             }
         }
     }
@@ -498,6 +570,11 @@ private struct SettingsView: View {
                     .accessibilityIdentifier("appearanceThemeButton")
                 }
 
+                Section("診断") {
+                    NavigationLink { OperationErrorLogView(store: store) } label: { Label("エラーログ", systemImage: "exclamationmark.bubble") }
+                        .accessibilityIdentifier("operationErrorLogButton")
+                }
+
                 Section("データ") {
                     Button { store.export(.markdown) } label: {
                         Label("Markdownを共有", systemImage: "square.and.arrow.up")
@@ -595,6 +672,19 @@ private struct AIFeaturesView: View {
                         Label("ナレッジ下書き", systemImage: "doc.text.magnifyingglass")
                     }
                     .accessibilityIdentifier("knowledgeManagementButton")
+                }
+
+                Section("Apps / Tools") {
+                    NavigationLink { SecondBrainAppsView(store: store) } label: {
+                        HStack {
+                            Label("Apps / Tools", systemImage: "square.grid.2x2")
+                            Spacer()
+                            Text("\(store.secondBrainApps.count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("secondBrainAppsButton")
                 }
 
                 Section("生成設定") {
@@ -1942,6 +2032,7 @@ struct KnowledgeDraftFlowView: View {
     @ObservedObject var store: ThoughtStore
     let input: KnowledgeDraftInput
     @State private var type: KnowledgeDraftType
+    @State private var confirmsAdditionalJournal = false
     @Environment(\.dismiss) private var dismiss
     init(store: ThoughtStore, input: KnowledgeDraftInput, initialType: KnowledgeDraftType = .knowledge) {
         self.store = store; self.input = input; _type = State(initialValue: initialType)
@@ -1949,19 +2040,174 @@ struct KnowledgeDraftFlowView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if store.isGeneratingKnowledgeDraft {
+                    Section { ProgressView(type == .journal ? "日記を生成しています…" : "下書きを生成しています…")
+                        Text("完了すると確認・編集画面が開きます。そのままお待ちください。").font(.footnote).foregroundStyle(.secondary)
+                    }.accessibilityIdentifier("knowledgeGenerationProgress")
+                }
                 Section("生成元") { LabeledContent("種類", value: input.source.displayName); Text(input.sourceContent).lineLimit(8) }
-                Section("下書きの種類") { Picker("種類", selection: $type) { ForEach(KnowledgeDraftType.allCases, id: \.self) { Text($0.displayName).tag($0) } }; Text(type.guidance).font(.footnote).foregroundStyle(.secondary) }
-                Section { Text("生成を押すまでAI通信は行いません。生成後のPreview確認とGitHub保存は別操作です。").font(.footnote).foregroundStyle(.secondary) }
+                if type != .journal { Section("下書きの種類") { Picker("種類", selection: $type) { ForEach(KnowledgeDraftType.allCases, id: \.self) { Text($0.displayName).tag($0) } }; Text(type.guidance).font(.footnote).foregroundStyle(.secondary) } }
+                Section { Text(type == .journal ? "日記を作ると編集画面が開きます。内容を確認し、保存するとこの端末とGitHubに残します。" : "生成を押すまでAI通信は行いません。生成後のPreview確認とGitHub保存は別操作です。").font(.footnote).foregroundStyle(.secondary) }
                 if let error = store.knowledgeDraftError { Section { Text(error).foregroundStyle(.red) } }
             }
-            .navigationTitle("ナレッジ下書き")
+            .navigationTitle(type == .journal ? "日記を作る" : "ナレッジ下書き")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button(store.isGeneratingKnowledgeDraft ? "生成中…" : "下書きを生成") { Task { await store.generateKnowledgeDraft(input: input, type: type) } }.disabled(store.isGeneratingKnowledgeDraft) }
+                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() }.disabled(store.isGeneratingKnowledgeDraft) }
+                ToolbarItem(placement: .confirmationAction) { Button(store.isGeneratingKnowledgeDraft ? "生成中…" : (type == .journal ? "日記を作る" : "下書きを生成")) { if existingJournalCount > 0 && type == .journal { confirmsAdditionalJournal = true } else { generate() } }.disabled(store.isGeneratingKnowledgeDraft).accessibilityIdentifier("generateKnowledgeDraftButton") }
             }
-            .sheet(item: Binding(get: { store.knowledgeDraft }, set: { if $0 == nil { store.cancelKnowledgeDraft() } })) { KnowledgeDraftPreviewView(store: store, draft: $0) }
+            .operationFeedback(store, scope: .knowledge, enabled: store.knowledgeDraft == nil)
+            .interactiveDismissDisabled(store.isGeneratingKnowledgeDraft)
+            .onAppear { store.cancelKnowledgeDraft(); store.loadKnowledge() }
+            .alert("この日の日記はすでにあります", isPresented: $confirmsAdditionalJournal) {
+                Button("別の日記として作る") { generate() }
+                Button("キャンセル", role: .cancel) {}
+            } message: { Text("この日の日記が\(existingJournalCount)件あります。既存の日記は日記カレンダーから確認・編集できます。追加で作成しますか？") }
+            .sheet(item: Binding(get: { store.knowledgeDraft }, set: { if $0 == nil { store.cancelKnowledgeDraft() } }), onDismiss: { if type == .journal { dismiss() } }) { if $0.type == .journal { ReflectionEditorView(store: store, initialDraft: $0) } else { KnowledgeDraftPreviewView(store: store, draft: $0) } }
         }
     }
+    private var existingJournalCount: Int {
+        guard let day = input.provenance.journalDate ?? input.provenance.dailySummaryDate else { return 0 }
+        return store.journalEntries().filter { $0.date == KnowledgeDraftPath.dateString(day) }.count
+    }
+    private func generate() { Task { await store.generateKnowledgeDraft(input: input, type: type) } }
+
+}
+
+private struct OperationFeedbackModifier: ViewModifier {
+    @ObservedObject var store: ThoughtStore
+    let scope: OperationErrorScope
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        content.alert(item: Binding(get: { enabled ? store.operationNotices[scope] : nil }, set: { if $0 == nil { store.dismissOperationNotice(scope) } })) { notice in
+            Alert(title: Text(notice.title), message: Text(notice.message), dismissButton: .default(Text("確認しました")) { store.dismissOperationNotice(scope) })
+        }
+    }
+}
+
+extension View {
+    func operationFeedback(_ store: ThoughtStore, scope: OperationErrorScope, enabled: Bool = true) -> some View {
+        modifier(OperationFeedbackModifier(store: store, scope: scope, enabled: enabled))
+    }
+}
+
+private struct OperationErrorLogView: View {
+    @ObservedObject var store: ThoughtStore
+    var body: some View {
+        List {
+            Section { Text("日時・処理・エラー分類を端末に記録しています。最新200件を保持します。本文・キー・Tokenは記録しません。").font(.footnote).foregroundStyle(.secondary) }
+            if let error = store.errorLogReadError { Section { Text(error).foregroundStyle(.red) } }
+            else if store.errorLogRecords.isEmpty { Section { Text("エラーログはありません。") } }
+            ForEach(store.errorLogRecords.reversed()) { record in
+                Section {
+                    Text(record.occurredAt.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month().day().hour().minute().second()))
+                    LabeledContent("処理", value: scopeName(record.scope))
+                    LabeledContent("分類", value: categoryName(record.category))
+                    LabeledContent("操作", value: record.action == .save ? "保存・GitHub反映" : (record.action == .generate ? "AI生成" : "準備・読み込み・その他"))
+                    Text(record.category.recovery).font(.footnote)
+                    Text("ログID: \(record.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
+                }
+            }
+        }
+        .navigationTitle("エラーログ").navigationBarTitleDisplayMode(.inline)
+        .onAppear { store.reloadErrorLog() }
+    }
+    private func scopeName(_ scope: OperationErrorScope) -> String {
+        switch scope { case .app: "アプリ操作"; case .dailyReview: "デイリー振り返り"; case .weeklyReview: "週間振り返り・プラン"; case .knowledge: "日記・ナレッジ生成／保存" }
+    }
+    private func categoryName(_ category: OperationErrorCategory) -> String {
+        switch category { case .settings: "設定不足"; case .permission: "認証・権限"; case .conflict: "変更の競合・保存先変更"; case .network: "通信"; case .storage: "端末保存"; case .limit: "利用上限"; case .stale: "対象の変更"; case .empty: "対象なし"; case .service: "処理失敗" }
+    }
+}
+
+struct SavedReflectionSection: View {
+    let draft: KnowledgeDraft
+    var body: some View {
+        Section("保存した振り返り") {
+            JournalMarkdownView(markdown: draft.body)
+            Label(draft.syncStatus == .synced ? "GitHubに保存済み" : "GitHubへの送信待ち", systemImage: draft.syncStatus == .synced ? "checkmark.circle" : "clock")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct ReflectionEditorView: View {
+    @ObservedObject var store: ThoughtStore
+    let initialDraft: KnowledgeDraft
+    @State private var draft: KnowledgeDraft
+    @State private var showsSettings = false
+    @State private var confirmsDuplicateSave = false
+    @Environment(\.dismiss) private var dismiss
+    init(store: ThoughtStore, initialDraft: KnowledgeDraft) {
+        self.store = store; self.initialDraft = initialDraft
+        _draft = State(initialValue: initialDraft)
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                if initialDraft.knowledgePath == nil {
+                    Section { Label("生成が完了しました。内容を確認して保存してください。", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+                }
+                if store.duplicateJournalCount(for: draft) > 0 {
+                    Section { Label("同じ日の同じ本文の日記がすでにあります。", systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                }
+                if initialDraft.knowledgePath != nil {
+                    Section { Text("保存済みの記録です。保存すると同じ記録を更新します。").font(.footnote).foregroundStyle(.secondary) }
+                }
+                if let status = store.reflectionSaveStatus {
+                    Section {
+                        ProgressView(status)
+                        Text("処理中です。完了までそのままお待ちください。").font(.footnote).foregroundStyle(.secondary)
+                    }.accessibilityIdentifier("reflectionSaveProgress")
+                }
+                Section("内容を確認・編集") {
+                    TextField("タイトル", text: $draft.title)
+                    TextEditor(text: $draft.body).frame(minHeight: 320)
+                        .accessibilityIdentifier("reflectionBodyEditor")
+                }
+                .disabled(store.isSavingKnowledgeDraft)
+                Section {
+                    Text("保存すると、この端末とGitHubに保存します。通信に失敗しても内容は端末に残ります。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    if draft.knowledgePath != nil {
+                        Label(draft.syncStatus == .synced ? "GitHubに保存済み" : "GitHubへの送信待ち", systemImage: draft.syncStatus == .synced ? "checkmark.circle" : "clock")
+                    } else { Text("内容を確認して保存してください。").font(.caption) }
+                    if !store.externalBrainManager.canWriteKnowledge {
+                        Button("GitHubの保存先を設定") { showsSettings = true }.disabled(store.isSavingKnowledgeDraft)
+                    }
+                    if let message = store.knowledgeDraftMessage { Text(message).foregroundStyle(.green) }
+                    if let error = store.knowledgeDraftError { Text(error).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle(draft.type == .journal ? "日記を保存" : "振り返りを保存")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() }.disabled(store.isSavingKnowledgeDraft) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(store.isSavingKnowledgeDraft ? (draft.knowledgeSHA == nil ? "反映中…" : "更新中…") : "保存する") {
+                        if store.duplicateJournalCount(for: draft) > 0 { confirmsDuplicateSave = true }
+                        else { save() }
+                    }
+                    .disabled(store.isSavingKnowledgeDraft || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("saveReflectionButton")
+                }
+            }
+            .alert("同じ本文の日記がすでにあります", isPresented: $confirmsDuplicateSave) {
+                Button("この内容で保存する") { save() }
+                Button("キャンセル", role: .cancel) {}
+            } message: { Text("別の記録として残ります。日記カレンダーで既存の日記を確認できます。保存を続けますか？") }
+            .onAppear { store.knowledgeDraftError = nil; store.knowledgeDraftMessage = nil }
+            .operationFeedback(store, scope: .knowledge, enabled: !showsSettings)
+            .interactiveDismissDisabled(store.isSavingKnowledgeDraft)
+            .sheet(isPresented: $showsSettings) { NavigationStack { ExternalBrainSettingsView(store: store) } }
+        }
+    }
+    private func save() {
+        Task {
+            _ = await store.saveReflection(draft)
+            if let saved = store.knowledgeDraft, saved.id == draft.id { draft = saved }
+        }
+    }
+
 }
 
 private struct KnowledgeDraftPreviewView: View {
@@ -1973,6 +2219,7 @@ private struct KnowledgeDraftPreviewView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section { Label("生成が完了しました。内容を確認して保存してください。", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
                 Section("下書き") {
                     TextField("Title", text: $draft.title)
                     Picker("種類", selection: $draft.type) { ForEach(KnowledgeDraftType.allCases, id: \.self) { Text($0.displayName).tag($0) } }
@@ -1997,6 +2244,7 @@ private struct KnowledgeDraftPreviewView: View {
                 }
                 if draft.savedPath == nil { Section { Text("保存の承認はGitHub drafts/への新規作成までです。確定知識への昇格ではありません。").font(.footnote).foregroundStyle(.secondary) } }
             }
+            .operationFeedback(store, scope: .knowledge, enabled: !showsGitHubSettings)
             .navigationTitle("下書きのプレビュー")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
@@ -2007,7 +2255,7 @@ private struct KnowledgeDraftPreviewView: View {
     }
 }
 
-private struct KnowledgeManagementView: View {
+struct KnowledgeManagementView: View {
     @ObservedObject var store: ThoughtStore
     @State private var filter: KnowledgeDraftReviewStatus?
     @State private var query = ""
@@ -2582,7 +2830,7 @@ private struct AIPersonaEditorView: View {
     private var previewPersona: Persona { Persona(id: persona?.id ?? UUID(), displayName: displayName, handle: handle.isEmpty ? nil : handle, kind: .ai, iconData: iconData, iconMIMEType: iconData == nil ? nil : "image/jpeg") }
 }
 
-private struct AIPostRequestView: View {
+struct AIPostRequestView: View {
     @ObservedObject var store: ThoughtStore
     @State private var selectedPersonaID: UUID?
     @State private var userRequest = ""

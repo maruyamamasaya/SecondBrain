@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum JapaneseCalendarFormatting {
+enum JapaneseCalendarFormatting {
     static let locale = Locale(identifier: "ja_JP")
     static var calendar: Calendar { var value = Calendar.current; value.locale = locale; return value }
     static func month(_ date: Date) -> String { format(date, template: "yyyyMMMM") }
@@ -100,7 +100,7 @@ struct SummaryLibraryView: View {
                     if !store.weeklySummaries.isEmpty {
                         Section("週間") {
                             ForEach(store.weeklySummaries) { summary in
-                                NavigationLink { WeeklySummaryReadOnlyView(summary: summary) } label: {
+                                NavigationLink { WeeklySummaryReadOnlyView(store: store, summary: summary) } label: {
                                     VStack(alignment: .leading, spacing: 5) {
                                         HStack { Label("週間", systemImage: "calendar.badge.clock").font(.caption.weight(.semibold)).foregroundStyle(.tint); Spacer(); Text("\(summary.thoughtCount)件").font(.caption).foregroundStyle(.secondary) }
                                         Text(summary.weekStart.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month().day()) + "〜" + summary.weekEnd.addingTimeInterval(-1).formatted(.dateTime.locale(Locale(identifier: "ja_JP")).month().day())).font(.headline)
@@ -136,6 +136,7 @@ struct SummaryLibraryView: View {
 private struct SummaryReadOnlyDetailView: View {
     @ObservedObject var store: ThoughtStore
     let summary: DailySummary
+    @State private var reflectionDraft: KnowledgeDraft?
 
     var body: some View {
         List {
@@ -144,13 +145,19 @@ private struct SummaryReadOnlyDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            DailySummarySections(summary: summary, store: store, allowsTagChanges: false)
+            if store.relatedReflectionCount(for: summary.dayStart) > 1 {
+                Section { Label("この日を元にした記録が複数あります。", systemImage: "doc.on.doc").foregroundStyle(.orange) }
+            }
+            if let saved = store.savedReflection(for: summary.dayStart) { SavedReflectionSection(draft: saved) }
+            else { DailySummarySections(summary: summary, store: store, allowsTagChanges: false) }
+            Section { Button("編集・保存する") { reflectionDraft = store.reflectionDraft(for: summary) } }
         }
         .themedScrollableBackground()
         .themedScreen(.expressive)
         .navigationTitle(JapaneseCalendarFormatting.day(summary.dayStart))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.loadDailySummary(for: summary.dayStart) }
+        .onAppear { store.loadDailySummary(for: summary.dayStart); store.loadKnowledge() }
+        .sheet(item: $reflectionDraft) { ReflectionEditorView(store: store, initialDraft: $0) }
     }
 }
 
@@ -293,7 +300,7 @@ struct JournalCalendarView: View {
                     ForEach(weekdayCells) { Text($0.value).font(.caption).foregroundStyle(.secondary) }
                     ForEach(dayCells) { cell in
                         if let day = cell.value {
-                            NavigationLink { JournalDayDetailView(day: day, entries: entries(for: day)) } label: { dayCell(day) }
+                            NavigationLink { JournalDayDetailView(store: store, day: day) } label: { dayCell(day) }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(JapaneseCalendarFormatting.longDay(day))、日記\(entries(for: day).count)件")
                         } else {
@@ -326,7 +333,8 @@ struct JournalCalendarView: View {
                 .accessibilityIdentifier("journalSyncButton")
             }
         }
-        .onAppear { entries = store.externalBrainManager.journalEntries() }
+        .onAppear { store.loadKnowledge(); entries = store.journalEntries() }
+        .onChange(of: store.knowledgeDrafts) { _ in entries = store.journalEntries() }
     }
 
     private var weekdayCells: [GridCell<String>] {
@@ -360,20 +368,29 @@ struct JournalCalendarView: View {
     private func synchronize() async {
         isSyncing = true; syncMessage = nil
         await store.externalBrainManager.synchronize()
-        entries = store.externalBrainManager.journalEntries()
+        entries = store.journalEntries()
         syncMessage = store.externalBrainManager.message
         isSyncing = false
     }
 }
 
 private struct JournalDayDetailView: View {
+    @ObservedObject var store: ThoughtStore
     let day: Date
-    let entries: [ExternalBrainJournalEntry]
+    @State private var editingDraft: KnowledgeDraft?
+    @State private var journalInput: KnowledgeDraftInput?
+    private var entries: [ExternalBrainJournalEntry] { store.journalEntries().filter { $0.date == KnowledgeDraftPath.dateString(day) } }
 
     var body: some View {
         List {
+            if entries.count > 1 {
+                Section { Label("この日の日記が\(entries.count)件あります。", systemImage: "doc.on.doc") }
+            }
+            if !JournalDuplicateDetection.groups(entries).isEmpty {
+                Section { Label("同じ本文の日記が複数あります。各記録の内容とGitHub情報を確認してください。", systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            }
             if entries.isEmpty {
-                Section { Text("この日の同期済み日記はありません。").foregroundStyle(.secondary) }
+                Section { Text("この日の日記はありません。").foregroundStyle(.secondary) }
             } else {
                 ForEach(entries) { entry in
                     Section {
@@ -385,6 +402,10 @@ private struct JournalDayDetailView: View {
                                     .padding(.horizontal, 9).padding(.vertical, 4).background(Color.purple.opacity(0.12), in: Capsule())
                             }
                             JournalMarkdownView(markdown: entry.body)
+                            if let draft = store.editableJournal(entry) {
+                                Button(draft.syncStatus == .synced ? "編集する" : "編集・保存する") { editingDraft = draft }
+                            }
+
                             DisclosureGroup("GitHub情報") {
                                 Text(entry.path).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                             }
@@ -396,15 +417,27 @@ private struct JournalDayDetailView: View {
             }
         }
         .navigationTitle(JapaneseCalendarFormatting.day(day))
+        .onAppear { store.loadKnowledge(); store.loadDailySummary(for: day) }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("日記を作る") { journalInput = store.journalDraftInput(for: day) }
+                    .disabled(store.dailySummaryDayThoughts.isEmpty)
+                    .accessibilityIdentifier("createJournalFromCalendarButton")
+            }
+        }
+        .sheet(isPresented: Binding(get: { journalInput != nil }, set: { if !$0 { journalInput = nil } })) {
+            if let input = journalInput { KnowledgeDraftFlowView(store: store, input: input, initialType: .journal) }
+        }
+        .sheet(item: $editingDraft) { ReflectionEditorView(store: store, initialDraft: $0) }
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func statusLabel(_ status: String) -> String {
-        switch status.lowercased() { case "active": "正式"; case "draft": "下書き"; default: status }
+        switch status.lowercased() { case "active": "保存済み"; case "draft": "下書き"; case "pending": "送信待ち"; default: status }
     }
 }
 
-private struct JournalMarkdownView: View {
+struct JournalMarkdownView: View {
     let markdown: String
     private var lines: [String] { markdown.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
 
@@ -443,9 +476,12 @@ private struct JournalMarkdownView: View {
     }
 }
 
-private struct DailySummaryDetailView: View {
+struct DailySummaryDetailView: View {
     @ObservedObject var store: ThoughtStore
     let day: Date
+    @State private var reflectionDraft: KnowledgeDraft?
+    @State private var opensReflectionAfterGeneration = false
+    @State private var summaryIDBeforeGeneration: UUID?
     @State private var draftInput: KnowledgeDraftInput?
     @State private var draftType: KnowledgeDraftType = .knowledge
 
@@ -457,10 +493,14 @@ private struct DailySummaryDetailView: View {
                 LabeledContent("あなたの継続Thought", value: "\(store.dailySummaryDayContinuationCount)件")
                 LabeledContent("既存タグ", value: store.dailySummaryDayTags.isEmpty ? "なし" : store.dailySummaryDayTags.joined(separator: "、"))
             }
+            if store.relatedReflectionCount(for: day) > 1 {
+                Section { Label("この日を元にした記録が複数あります。既存の下書きも確認してください。", systemImage: "doc.on.doc").foregroundStyle(.orange) }
+            }
             if let summary = store.dailySummary {
-                DailySummarySections(summary: summary, store: store)
+                if let saved = store.savedReflection(for: summary.dayStart) { SavedReflectionSection(draft: saved) }
+                else { DailySummarySections(summary: summary, store: store) }
                 Section("操作") {
-                    Button("この日を再生成") { store.prepareDailySummary(for: day) }
+                    Button("この日を再生成") { summaryIDBeforeGeneration = store.dailySummary?.id; opensReflectionAfterGeneration = true; store.prepareDailySummary(for: day) }
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .disabled(store.dailySummaryDayThoughts.isEmpty || store.isGeneratingDailySummary)
                         .accessibilityIdentifier("regenerateDailySummaryButton")
@@ -470,11 +510,11 @@ private struct DailySummaryDetailView: View {
                     Button("日記を作る") { openJournalDraft() }
                         .disabled(store.dailySummaryDayThoughts.isEmpty)
                         .accessibilityIdentifier("createJournalDraftButton")
-                    Button("サマリーを外部脳に残す") { draftType = .knowledge; draftInput = store.knowledgeDraftInput(for: summary) }
+                    Button("編集・保存する") { reflectionDraft = store.reflectionDraft(for: summary) }
                 }
             } else {
                 Section {
-                    Button("この日をまとめる") { store.prepareDailySummary(for: day) }
+                    Button("この日をまとめる") { summaryIDBeforeGeneration = store.dailySummary?.id; opensReflectionAfterGeneration = true; store.prepareDailySummary(for: day) }
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .disabled(store.dailySummaryDayThoughts.isEmpty)
                         .accessibilityIdentifier("prepareDailySummaryButton")
@@ -487,10 +527,17 @@ private struct DailySummaryDetailView: View {
         }
         .navigationTitle(JapaneseCalendarFormatting.day(day))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.loadDailySummary(for: day) }
-        .sheet(item: Binding(get: { store.dailySummaryPreview }, set: { if $0 == nil { store.cancelDailySummaryPreview() } })) { preview in
+        .operationFeedback(store, scope: .dailyReview, enabled: store.dailySummaryPreview == nil && reflectionDraft == nil && draftInput == nil)
+        .onAppear { store.loadDailySummary(for: day); store.loadKnowledge() }
+        .sheet(item: Binding(get: { store.dailySummaryPreview }, set: { if $0 == nil { store.cancelDailySummaryPreview() } }), onDismiss: {
+            if opensReflectionAfterGeneration, let summary = store.dailySummary, summary.dayStart == Calendar.current.startOfDay(for: day), store.dailySummaryError == nil, summary.id != summaryIDBeforeGeneration {
+                reflectionDraft = store.reflectionDraft(for: summary, reuseSaved: false)
+            }
+            opensReflectionAfterGeneration = false
+        }) { preview in
             DailySummaryPreviewView(store: store, preview: preview)
         }
+        .sheet(item: $reflectionDraft) { ReflectionEditorView(store: store, initialDraft: $0) }
         .sheet(isPresented: Binding(get: { draftInput != nil }, set: { if !$0 { draftInput = nil } })) { if let input = draftInput { KnowledgeDraftFlowView(store: store, input: input, initialType: draftType) } }
     }
 
@@ -508,6 +555,12 @@ private struct DailySummaryPreviewView: View {
     var body: some View {
         NavigationStack {
             List {
+                if store.isGeneratingDailySummary {
+                    Section { ProgressView("振り返りを生成しています…")
+                        Text("完了すると確認・編集画面が開きます。").font(.footnote).foregroundStyle(.secondary)
+                    }.accessibilityIdentifier("dailySummaryGenerationProgress")
+                }
+                if let error = store.dailySummaryError { Section { Text(error).foregroundStyle(.red) } }
                 Section("送信内容") {
                     Text("あなたのThoughtだけを送信します。AI Personaの本文は含みません。")
                         .font(.subheadline)
@@ -524,9 +577,11 @@ private struct DailySummaryPreviewView: View {
                 }
                 Section("最終payload") { Text(preview.request.prompt).font(.caption).textSelection(.enabled) }
             }
+            .operationFeedback(store, scope: .dailyReview)
+            .interactiveDismissDisabled(store.isGeneratingDailySummary)
             .navigationTitle("送信前プレビュー")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { store.cancelDailySummaryPreview(); dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { store.cancelDailySummaryPreview(); dismiss() }.disabled(store.isGeneratingDailySummary) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(store.isGeneratingDailySummary ? "生成中…" : "送信") {
                         Task { await store.generateDailySummary(from: preview); if store.dailySummaryError == nil { dismiss() } }

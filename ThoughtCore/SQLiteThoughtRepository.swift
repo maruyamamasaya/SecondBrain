@@ -1570,17 +1570,17 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
         }
         if version < 20 {
             try transaction {
-                try execute("CREATE TABLE weekly_summaries(id TEXT PRIMARY KEY NOT NULL,week_start REAL NOT NULL UNIQUE,week_end REAL NOT NULL,content_json TEXT NOT NULL,created_at REAL NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,prompt_version INTEGER NOT NULL,thought_count INTEGER NOT NULL CHECK (thought_count > 0),CHECK (week_start < week_end))")
-                try execute("CREATE INDEX weekly_summaries_start_idx ON weekly_summaries(week_start DESC)")
-                try execute("CREATE TABLE weekly_plans(id TEXT PRIMARY KEY NOT NULL,target_week_start REAL NOT NULL UNIQUE,target_week_end REAL NOT NULL,source_summary_id TEXT NOT NULL,content_json TEXT NOT NULL,created_at REAL NOT NULL,updated_at REAL NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,prompt_version INTEGER NOT NULL,CHECK (target_week_start < target_week_end))")
-                try execute("CREATE INDEX weekly_plans_start_idx ON weekly_plans(target_week_start DESC)")
+                try execute("CREATE TABLE IF NOT EXISTS weekly_summaries(id TEXT PRIMARY KEY NOT NULL,week_start REAL NOT NULL UNIQUE,week_end REAL NOT NULL,content_json TEXT NOT NULL,created_at REAL NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,prompt_version INTEGER NOT NULL,thought_count INTEGER NOT NULL CHECK (thought_count > 0),CHECK (week_start < week_end))")
+                try execute("CREATE INDEX IF NOT EXISTS weekly_summaries_start_idx ON weekly_summaries(week_start DESC)")
+                try execute("CREATE TABLE IF NOT EXISTS weekly_plans(id TEXT PRIMARY KEY NOT NULL,target_week_start REAL NOT NULL UNIQUE,target_week_end REAL NOT NULL,source_summary_id TEXT NOT NULL,content_json TEXT NOT NULL,created_at REAL NOT NULL,updated_at REAL NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,prompt_version INTEGER NOT NULL,CHECK (target_week_start < target_week_end))")
+                try execute("CREATE INDEX IF NOT EXISTS weekly_plans_start_idx ON weekly_plans(target_week_start DESC)")
                 try execute("PRAGMA user_version = 20")
             }
         }
         if version < 21 {
             try transaction {
                 try execute("""
-                    CREATE TABLE secondbrain_apps (
+                    CREATE TABLE IF NOT EXISTS secondbrain_apps (
                         id TEXT PRIMARY KEY NOT NULL,
                         name TEXT NOT NULL CHECK (length(trim(name)) > 0),
                         description TEXT NOT NULL,
@@ -1601,21 +1601,21 @@ public final class SQLiteThoughtRepository: ThoughtRepository, AuthoredThoughtRe
                         )
                     )
                     """)
-                try execute("CREATE INDEX secondbrain_apps_order_idx ON secondbrain_apps(sort_order ASC, name COLLATE NOCASE ASC, id ASC)")
-                try execute("CREATE INDEX secondbrain_apps_favorite_idx ON secondbrain_apps(is_favorite DESC, sort_order ASC)")
+                try execute("CREATE INDEX IF NOT EXISTS secondbrain_apps_order_idx ON secondbrain_apps(sort_order ASC, name COLLATE NOCASE ASC, id ASC)")
+                try execute("CREATE INDEX IF NOT EXISTS secondbrain_apps_favorite_idx ON secondbrain_apps(is_favorite DESC, sort_order ASC)")
                 try execute("PRAGMA user_version = 21")
             }
         }
         if version < 22 {
             try transaction {
                 try execute("""
-                    CREATE TABLE secondbrain_default_app_seed_history (
+                    CREATE TABLE IF NOT EXISTS secondbrain_default_app_seed_history (
                         app_id TEXT PRIMARY KEY NOT NULL,
                         catalog_version INTEGER NOT NULL CHECK (catalog_version > 0),
                         seeded_at REAL NOT NULL
                     )
                     """)
-                try execute("CREATE INDEX secondbrain_default_app_seed_version_idx ON secondbrain_default_app_seed_history(catalog_version, seeded_at)")
+                try execute("CREATE INDEX IF NOT EXISTS secondbrain_default_app_seed_version_idx ON secondbrain_default_app_seed_history(catalog_version, seeded_at)")
                 try execute("PRAGMA user_version = 22")
             }
         }

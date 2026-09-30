@@ -43,18 +43,26 @@ struct WeeklyReviewListView: View {
     private func shortDate(_ date: Date) -> String { date.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).month().day()) }
 }
 
-private struct WeeklyReviewDetailView: View {
+struct WeeklyReviewDetailView: View {
     @ObservedObject var store: ThoughtStore
     let interval: DateInterval
     let calendar: Calendar
     @State private var showsSummaryPreview = false
     @State private var showsPlanEditor = false
+    @State private var reflectionDraft: KnowledgeDraft?
+    @State private var opensReflectionAfterGeneration = false
+    @State private var summaryIDBeforeGeneration: UUID?
 
     var body: some View {
         List {
             Section("対象期間") { Text("\(day(interval.start))〜\(day(interval.end.addingTimeInterval(-1)))") }
+            if store.relatedReflectionCount(for: interval.start, weekly: true) > 1 {
+                Section { Label("同じ週の振り返り記録が複数あります。", systemImage: "doc.on.doc").foregroundStyle(.orange) }
+            }
             if let summary = store.weeklySummary, summary.weekStart == interval.start {
-                WeeklySummarySections(summary: summary)
+                if let saved = store.savedReflection(for: summary.weekStart, weekly: true) { SavedReflectionSection(draft: saved) }
+                else { WeeklySummarySections(summary: summary) }
+                Section { Button("編集・保存する") { reflectionDraft = store.reflectionDraft(for: summary) } }
                 Section {
                     Button("次週プランの候補を作る") { Task { await store.generateWeeklyPlanDraft(from: summary); if store.weeklyPlanDraft != nil { showsPlanEditor = true } } }
                         .disabled(store.isGeneratingWeeklyReview)
@@ -72,11 +80,16 @@ private struct WeeklyReviewDetailView: View {
         }
         .themedScrollableBackground().themedScreen(.expressive)
         .navigationTitle("週間振り返り").navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.loadWeeklyReview(interval: interval) }
-        .sheet(isPresented: $showsSummaryPreview) { if let preview = store.weeklySummaryPreview { WeeklySummaryPreviewSheet(store: store, preview: preview, calendar: calendar) } }
+        .operationFeedback(store, scope: .weeklyReview, enabled: !showsSummaryPreview && !showsPlanEditor && reflectionDraft == nil)
+        .onAppear { store.loadWeeklyReview(interval: interval); store.loadKnowledge() }
+        .sheet(item: $reflectionDraft) { ReflectionEditorView(store: store, initialDraft: $0) }
+        .sheet(isPresented: $showsSummaryPreview, onDismiss: {
+            if opensReflectionAfterGeneration, let summary = store.weeklySummary, summary.weekStart == interval.start, store.weeklyReviewError == nil, summary.id != summaryIDBeforeGeneration { reflectionDraft = store.reflectionDraft(for: summary, reuseSaved: false) }
+            opensReflectionAfterGeneration = false
+        }) { if let preview = store.weeklySummaryPreview { WeeklySummaryPreviewSheet(store: store, preview: preview, calendar: calendar) } }
         .sheet(isPresented: $showsPlanEditor) { if let draft = store.weeklyPlanDraft { WeeklyPlanEditor(store: store, draft: draft) } }
     }
-    private func prepareSummary() { store.prepareWeeklySummary(interval: interval, calendar: calendar); showsSummaryPreview = store.weeklySummaryPreview != nil }
+    private func prepareSummary() { summaryIDBeforeGeneration = store.weeklySummary?.id; opensReflectionAfterGeneration = true; store.prepareWeeklySummary(interval: interval, calendar: calendar); showsSummaryPreview = store.weeklySummaryPreview != nil }
     private func day(_ date: Date) -> String { date.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month().day()) }
 }
 
@@ -115,12 +128,19 @@ private struct WeeklySummaryPreviewSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                if store.isGeneratingWeeklyReview {
+                    Section { ProgressView("週間振り返りを生成しています…")
+                        Text("完了すると確認・編集画面が開きます。").font(.footnote).foregroundStyle(.secondary)
+                    }.accessibilityIdentifier("weeklySummaryGenerationProgress")
+                }
                 Section("送信内容") { LabeledContent("Human Thought", value: "\(preview.thoughts.count)件"); LabeledContent("文字数", value: "\(preview.thoughts.reduce(0) { $0 + $1.body.count })文字"); LabeledContent("AI", value: "OpenAI / \(ReviewSummaryAIConfiguration.weeklyReviewModelName) / medium") }
                 Section("対象Thought") { ForEach(preview.thoughts) { Text($0.body) } }
                 if let error = store.weeklyReviewError { Section { Text(error).foregroundStyle(.red) } }
             }
+            .operationFeedback(store, scope: .weeklyReview)
+            .interactiveDismissDisabled(store.isGeneratingWeeklyReview)
             .navigationTitle("送信前の確認").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("生成") { Task { await store.generateWeeklySummary(from: preview, calendar: calendar); if store.weeklySummaryPreview == nil { dismiss() } } }.disabled(store.isGeneratingWeeklyReview) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() }.disabled(store.isGeneratingWeeklyReview) }; ToolbarItem(placement: .confirmationAction) { Button("生成") { Task { await store.generateWeeklySummary(from: preview, calendar: calendar); if store.weeklySummaryPreview == nil { dismiss() } } }.disabled(store.isGeneratingWeeklyReview) } }
         }
     }
 }
@@ -146,6 +166,7 @@ private struct WeeklyPlanEditor: View {
                 Section("持ち越す問い") { ForEach(questions.indices, id: \.self) { TextField("問い \($0 + 1)", text: $questions[$0], axis: .vertical) } }
                 Section("自由メモ") { TextField("任意", text: $note, axis: .vertical) }
             }
+            .operationFeedback(store, scope: .weeklyReview)
             .navigationTitle("次週プランを確認").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("確定") { store.saveWeeklyPlan(draft: draft, content: .init(focus: focus, actions: actions.filter { !$0.isEmpty }, questions: questions.filter { !$0.isEmpty }, note: note)); if store.weeklyReviewError == nil { dismiss() } }.disabled(focus.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
         }
@@ -153,6 +174,21 @@ private struct WeeklyPlanEditor: View {
 }
 
 struct WeeklySummaryReadOnlyView: View {
+    @ObservedObject var store: ThoughtStore
     let summary: WeeklySummary
-    var body: some View { List { WeeklySummarySections(summary: summary) }.themedScrollableBackground().themedScreen(.expressive).navigationTitle("週間サマリー").navigationBarTitleDisplayMode(.inline) }
+    @State private var reflectionDraft: KnowledgeDraft?
+    var body: some View {
+        List {
+            if store.relatedReflectionCount(for: summary.weekStart, weekly: true) > 1 {
+                Section { Label("同じ週の振り返り記録が複数あります。", systemImage: "doc.on.doc").foregroundStyle(.orange) }
+            }
+            if let saved = store.savedReflection(for: summary.weekStart, weekly: true) { SavedReflectionSection(draft: saved) }
+            else { WeeklySummarySections(summary: summary) }
+            Section { Button("編集・保存する") { reflectionDraft = store.reflectionDraft(for: summary) } }
+        }
+        .themedScrollableBackground().themedScreen(.expressive)
+        .navigationTitle("週間サマリー").navigationBarTitleDisplayMode(.inline)
+        .onAppear { store.loadKnowledge() }
+        .sheet(item: $reflectionDraft) { ReflectionEditorView(store: store, initialDraft: $0) }
+    }
 }

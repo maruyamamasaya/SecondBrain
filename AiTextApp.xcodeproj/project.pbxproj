@@ -44,6 +44,7 @@
 		E1A000000000000000000001 /* WeeklyReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000000000000000000001 /* WeeklyReview.swift */; };
 		E1A000000000000000000002 /* WeeklyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A000000000000000000002 /* WeeklyReviewView.swift */; };
 		E1B000000000000000000001 /* SecondBrainApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B000000000000000000001 /* SecondBrainApp.swift */; };
+		E1B000000000000000000002 /* SecondBrainAppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B000000000000000000002 /* SecondBrainAppsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +96,7 @@
 		E2A000000000000000000001 /* WeeklyReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReview.swift; sourceTree = "<group>"; };
 		E2A000000000000000000002 /* WeeklyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyReviewView.swift; sourceTree = "<group>"; };
 		E2B000000000000000000001 /* SecondBrainApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainApp.swift; sourceTree = "<group>"; };
+		E2B000000000000000000002 /* SecondBrainAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainAppsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +158,7 @@
 				F20000000000000000000010 /* AppTheme.swift */,
 				A2D000000000000000000002 /* DailySummaryView.swift */,
 				E2A000000000000000000002 /* WeeklyReviewView.swift */,
+				E2B000000000000000000002 /* SecondBrainAppsView.swift */,
 				F20000000000000000000002 /* ExternalBrainManager.swift */,
 				G20000000000000000000002 /* AIAPIUsageAnalyticsView.swift */,
 			);
@@ -371,6 +374,7 @@
 				H10000000000000000000001 /* OpenAIReviewSummaryClient.swift in Sources */,
 				E1A000000000000000000001 /* WeeklyReview.swift in Sources */,
 				E1B000000000000000000001 /* SecondBrainApp.swift in Sources */,
+				E1B000000000000000000002 /* SecondBrainAppsView.swift in Sources */,
 				E1A000000000000000000002 /* WeeklyReviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -465,7 +469,7 @@
 				DEVELOPMENT_TEAM = U29GY347DY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTextApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Thoughts;
+				INFOPLIST_KEY_CFBundleDisplayName = SecondBrain;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -493,7 +497,7 @@
 				DEVELOPMENT_TEAM = U29GY347DY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTextApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Thoughts;
+				INFOPLIST_KEY_CFBundleDisplayName = SecondBrain;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

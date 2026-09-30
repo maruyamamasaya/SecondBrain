@@ -10,6 +10,106 @@ final class ThoughtFlowUITests: XCTestCase {
         app.launch()
     }
 
+    func testDailySummaryGenerationOpensSaveEditor() {
+        app.terminate()
+        app.launchArguments.append("--ui-testing-reflection-save")
+        app.launch()
+        app.buttons["homeInsightsButton"].tap()
+        app.buttons["insightsDailySummaryButton"].tap()
+        let day = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "あなたのThoughtあり、未要約")).firstMatch
+        XCTAssertTrue(day.waitForExistence(timeout: 5))
+        day.tap()
+        app.buttons["prepareDailySummaryButton"].tap()
+        let send = app.buttons["送信"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        send.tap()
+        let body = app.textViews["reflectionBodyEditor"]
+        XCTAssertTrue(body.waitForExistence(timeout: 10))
+        XCTAssertTrue((body.value as? String)?.contains("生成された振り返り") == true)
+        XCTAssertTrue(app.buttons["saveReflectionButton"].exists)
+    }
+
+    func testReflectionSaveShowsProgressAndCompletion() {
+        app.terminate()
+        app.launchArguments += ["--ui-testing-reflection-save", "--ui-testing-save-success"]
+        app.launch()
+        app.buttons["homeInsightsButton"].tap()
+        app.buttons["insightsJournalButton"].tap()
+        let journalDay = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "日記1件")).firstMatch
+        XCTAssertTrue(journalDay.waitForExistence(timeout: 5))
+        journalDay.tap()
+        let edit = app.buttons["編集・保存する"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let save = app.buttons["saveReflectionButton"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let progress = app.staticTexts["GitHubへ反映しています…"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 2))
+        XCTAssertFalse(save.isEnabled)
+        let completed = app.alerts["保存が完了しました"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        completed.buttons["確認しました"].tap()
+        XCTAssertTrue(app.staticTexts["GitHubに保存済み"].exists)
+        save.tap()
+        let updated = app.alerts["更新が完了しました"]
+        XCTAssertTrue(updated.waitForExistence(timeout: 5))
+        updated.buttons["確認しました"].tap()
+    }
+
+    func testJournalCreationWarnsAboutExistingDay() {
+        app.terminate()
+        app.launchArguments.append("--ui-testing-reflection-save")
+        app.launch()
+        app.buttons["homeInsightsButton"].tap()
+        app.buttons["insightsJournalButton"].tap()
+        let journalDay = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "日記1件")).firstMatch
+        XCTAssertTrue(journalDay.waitForExistence(timeout: 5))
+        journalDay.tap()
+        let create = app.buttons["createJournalFromCalendarButton"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+        let generate = app.buttons["generateKnowledgeDraftButton"]
+        XCTAssertTrue(generate.waitForExistence(timeout: 5))
+        generate.tap()
+        let alert = app.alerts["この日の日記はすでにあります"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["別の日記として作る"].exists)
+        alert.buttons["キャンセル"].tap()
+        XCTAssertFalse(app.textViews["reflectionBodyEditor"].exists)
+    }
+
+    func testJournalSaveFailureKeepsEditedContentInCalendar() {
+        app.terminate()
+        app.launchArguments.append("--ui-testing-reflection-save")
+        app.launch()
+        app.buttons["homeInsightsButton"].tap()
+        app.buttons["insightsJournalButton"].tap()
+        let journalDay = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "日記1件")).firstMatch
+        XCTAssertTrue(journalDay.waitForExistence(timeout: 5))
+        journalDay.tap()
+        let edit = app.buttons["編集・保存する"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let body = app.textViews["reflectionBodyEditor"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        body.tap()
+        body.typeText("追記した記録")
+        app.buttons["saveReflectionButton"].tap()
+        let pending = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "端末に保存済み・GitHubへの送信待ちです。")).firstMatch
+        XCTAssertTrue(pending.waitForExistence(timeout: 5))
+        let alert = app.alerts["処理を完了できませんでした"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "次の対応")).firstMatch.exists)
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "ログID:")).firstMatch.exists)
+        alert.buttons["確認しました"].tap()
+        app.buttons["閉じる"].tap()
+        XCTAssertTrue(app.staticTexts["送信待ち"].waitForExistence(timeout: 5))
+        app.buttons["編集・保存する"].tap()
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        XCTAssertTrue((body.value as? String)?.contains("追記した記録") == true)
+    }
+
     func testPostCancelDeleteThenConfirmDelete() {
         let composer = openComposer()
         let post = app.buttons["postButton"]
@@ -134,7 +234,7 @@ final class ThoughtFlowUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts[parent].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts[child].waitForExistence(timeout: 2))
-        app.navigationBars["Thought"].buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["思考メモ"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts[child].waitForExistence(timeout: 2), "Continuationが通常Timelineにも表示される")
     }
 
@@ -160,7 +260,7 @@ final class ThoughtFlowUITests: XCTestCase {
         XCTAssertTrue(postReply.isEnabled)
         postReply.tap()
 
-        XCTAssertTrue(app.navigationBars["Thoughts"].waitForExistence(timeout: 2), "返信後はTimelineへ戻る")
+        XCTAssertTrue(app.navigationBars["思考メモ"].waitForExistence(timeout: 2), "返信後はTimelineへ戻る")
         XCTAssertTrue(app.staticTexts[reply].waitForExistence(timeout: 2))
         XCTAssertFalse(replyComposer.exists)
         XCTAssertTrue(
@@ -193,10 +293,11 @@ final class ThoughtFlowUITests: XCTestCase {
         replyComposer.typeText("もう少し詳しく")
         app.buttons["postHumanReplyButton"].tap()
 
-        XCTAssertTrue(
-            app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "replyContext_")).firstMatch.waitForExistence(timeout: 2),
-            "通常返信は会話の最新AI Thoughtを返信先にする"
-        )
+        XCTAssertTrue(app.navigationBars["思考メモ"].waitForExistence(timeout: 3))
+        app.buttons["homeReplyVisibilityButton"].tap()
+        let humanReply = timelineRow(containing: "もう少し詳しく")
+        XCTAssertTrue(humanReply.waitForExistence(timeout: 3))
+        XCTAssertTrue(humanReply.label.contains("一緒に考えてみましょう。"), "通常返信は会話の最新AI Thoughtを返信先にする")
     }
 
     func testHomeHidesRepliesAfterTheFirstByDefaultAndCanShowThem() {
@@ -354,6 +455,38 @@ final class ThoughtFlowUITests: XCTestCase {
         XCTAssertEqual(composer.value as? String, "タブを移動しても残るDraft")
     }
 
+    func testAppsToolsShowsDefaultsConfirmsDestinationAndAddsWebApp() {
+        app.tabBars.buttons["AI機能"].tap()
+        let entry = app.buttons["secondBrainAppsButton"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 3))
+        entry.tap()
+
+        XCTAssertTrue(app.navigationBars["Apps / Tools"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Shared Memo"].exists)
+        XCTAssertTrue(app.staticTexts["My Wiki"].exists)
+        XCTAssertTrue(app.staticTexts["Study"].exists)
+        XCTAssertTrue(app.staticTexts["Tool"].exists)
+
+        app.buttons["launchSecondBrainApp_40000000-0000-4000-8000-000000000001"].tap()
+        let destination = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "maruyamamasaya.github.io")
+        ).firstMatch
+        XCTAssertTrue(destination.waitForExistence(timeout: 2))
+        app.buttons["キャンセル"].tap()
+
+        app.buttons["addSecondBrainAppButton"].tap()
+        let name = app.textFields["secondBrainAppNameField"]
+        let target = app.textFields["secondBrainAppTargetField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 2))
+        name.tap()
+        name.typeText("UI Test Tool")
+        target.tap()
+        target.typeText("https://example.com/tool")
+        app.buttons["saveSecondBrainAppButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["UI Test Tool"].waitForExistence(timeout: 3))
+    }
+
     func testFourThemesAcrossFiveTabsAndPersistence() {
         app.terminate()
         app.launchArguments.append("--ui-testing-theme-persistence")
@@ -401,8 +534,10 @@ final class ThoughtFlowUITests: XCTestCase {
         app.buttons["postButton"].tap()
 
         app.staticTexts[body].tap()
-        XCTAssertTrue(app.buttons["editThoughtTagsButton"].waitForExistence(timeout: 2))
-        app.buttons["editThoughtTagsButton"].tap()
+        app.buttons["投稿のその他の操作"].tap()
+        let editTags = app.buttons["タグを編集"]
+        XCTAssertTrue(editTags.waitForExistence(timeout: 2))
+        editTags.tap()
         let tagField = app.textFields["newThoughtTagField"]
         XCTAssertTrue(tagField.waitForExistence(timeout: 2))
         tagField.tap()

@@ -79,3 +79,23 @@ git diff --check
 git status --short
 git ls-files
 ```
+
+## 起動時の振り返り案内
+
+前日／直近の月曜〜日曜にHuman Thoughtがあり未作成の場合、起動とバックグラウンドからの復帰で案内されることを確認する。作成済み・Human Thoughtなし・AI Thoughtだけの場合は案内しない。期間別にスキップして再起動後も案内されないこと、新しい対象期間は案内されること、スキップ後も通常の振り返り画面から作成できることを確認する。「あとで」・Sheetを閉じる操作は次の起動／復帰で再案内する。案内時はAPIを呼ばず、対象画面から送信前確認後に生成する。
+
+## 日記・振り返りの簡単保存
+
+`ReflectionSaveTests`でUUID付きpathの衝突回避、path維持、front matterだけのstatus変更、新規保存、既知SHA更新、外部編集／削除時の拒否、同一内容再送、旧provenance JSON decodeと送信待ち／保存済みSQLite再読込を検証する。
+
+専用`--ui-testing-reflection-save`は独立した一時SQLite・未設定のGitHub保存先とMockを使用する。`testJournalSaveFailureKeepsEditedContentInCalendar`は日記編集・保存失敗・送信待ち・一覧から再編集した本文保持を、`testDailySummaryGenerationOpensSaveEditor`は生成後の編集画面自動表示を確認する。実GitHubへは接続しない。
+
+実機では日記／Daily／Weeklyの作成・編集・保存、GitHub同じpath更新、通信失敗後の再送、GitHub側編集時の衝突表示、再起動後の本文・送信状態を確認する。実GitHubとの通信検証は通常テストへ組み込まない。
+
+生成中は画面内ProgressViewとボタンの生成中表示、保存中は端末保存／GitHub反映／更新の表示を確認する。処理中は保存・生成の再実行、入力変更・画面終了が無効となり、成功／失敗後に操作が復帰することを確認する。
+
+## エラー・完了・重複通知
+
+OperationErrorLogTestsで再読込・最新200件保持・診断情報だけのJSON schema・破損ログ保全・次の対応の分類を検証する。JournalDuplicateDetectionTestsは同日同本文を検出し、別日・別本文・同path重複を候補から除外する。
+
+UI testJournalSaveFailureKeepsEditedContentInCalendarはエラーポップアップ・次の対応・ログIDを確認する。testReflectionSaveShowsProgressAndCompletionは、2秒待機の専用ReflectionWriting stub（実通信なし）で反映中・操作無効・保存完了／更新完了を確認する。testJournalCreationWarnsAboutExistingDayは同日の日記追加前確認とキャンセルを検証する。

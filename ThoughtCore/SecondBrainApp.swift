@@ -160,6 +160,51 @@ public protocol SecondBrainAppRepository: Sendable {
     @discardableResult func seedDefaultAppsIfNeeded(now: Date) throws -> Int
 }
 
+public enum SecondBrainAppLaunchCommand: Equatable, Sendable {
+    case native(SecondBrainNativeFeature)
+    case externalURL(URL, confirmation: String)
+}
+
+/// 保存時と起動時の両方で同じDomain policyを適用する。
+public enum SecondBrainAppLaunchPolicy {
+    public static func prepare(_ app: SecondBrainApp) throws -> SecondBrainAppLaunchCommand {
+        _ = try SecondBrainApp(
+            id: app.id,
+            name: app.name,
+            description: app.description,
+            icon: app.icon,
+            kind: app.kind,
+            launchTarget: app.launchTarget,
+            category: app.category,
+            isFavorite: app.isFavorite,
+            sortOrder: app.sortOrder,
+            createdAt: app.createdAt,
+            updatedAt: app.updatedAt
+        )
+
+        switch app.launchTarget {
+        case .nativeFeature(let feature):
+            return .native(feature)
+        case .webURL(let value):
+            guard let url = URL(string: value), let host = url.host else {
+                throw SecondBrainAppValidationError.invalidURL
+            }
+            return .externalURL(url, confirmation: host)
+        case .localURL(let value):
+            guard let url = URL(string: value), let host = url.host else {
+                throw SecondBrainAppValidationError.invalidURL
+            }
+            let endpoint = url.port.map { "\(host):\($0)" } ?? host
+            return .externalURL(url, confirmation: "Local Web: \(endpoint)")
+        case .deepLink(let value):
+            guard let url = URL(string: value), let scheme = url.scheme else {
+                throw SecondBrainAppValidationError.invalidDeepLink
+            }
+            return .externalURL(url, confirmation: "\(scheme)://")
+        }
+    }
+}
+
 public extension SecondBrainAppRepository {
     @discardableResult
     func seedDefaultAppsIfNeeded() throws -> Int {

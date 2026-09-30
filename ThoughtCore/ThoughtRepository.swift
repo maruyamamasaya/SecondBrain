@@ -21,7 +21,7 @@ public protocol ThoughtRepository: Sendable {
 }
 
 /// A small repository useful for previews and domain tests. SQLite is the app's durable store.
-public final class MemoryThoughtRepository: ThoughtRepository, AuthoredThoughtRepository, ThoughtMentionRepository, AIPersonaRepository, AIThoughtReplyRepository, HumanThoughtReplyRepository, ThoughtRelationRepository, ThoughtContinuationRepository, ThoughtTagRepository, ThoughtAnalyticsRepository, ReviewSummaryRepository, DailySummaryRepository, WeeklyReviewRepository, PersonaRepository, @unchecked Sendable {
+public final class MemoryThoughtRepository: ThoughtRepository, AuthoredThoughtRepository, ThoughtMentionRepository, AIPersonaRepository, AIThoughtReplyRepository, HumanThoughtReplyRepository, ThoughtRelationRepository, ThoughtContinuationRepository, ThoughtTagRepository, ThoughtAnalyticsRepository, ReviewSummaryRepository, DailySummaryRepository, WeeklyReviewRepository, SecondBrainAppRepository, PersonaRepository, @unchecked Sendable {
     private var records: [Thought]
     private var relations: [ThoughtRelation]
     private var summaries: [ReviewSummary]
@@ -36,6 +36,8 @@ public final class MemoryThoughtRepository: ThoughtRepository, AuthoredThoughtRe
     private var aiConfigurations: [UUID: AIPersonaConfiguration] = [:]
     private var aiGenerations: [UUID: AIPostGeneration] = [:]
     private var mentionsByThoughtID: [UUID: [ThoughtMention]] = [:]
+    private var secondBrainApps: [UUID: SecondBrainApp] = [:]
+    private var seededDefaultAppIDs: Set<UUID> = []
     private let lock = NSLock()
 
     public init(records: [Thought] = [], relations: [ThoughtRelation] = [], summaries: [ReviewSummary] = [], dailySummaries: [DailySummary] = [], tags: [ThoughtTag] = [], thoughtTagIDs: [UUID: Set<UUID>] = [:]) {
@@ -47,6 +49,9 @@ public final class MemoryThoughtRepository: ThoughtRepository, AuthoredThoughtRe
         self.thoughtTagIDs = thoughtTagIDs
         personas[Persona.defaultHumanID] = defaultPersona
         authorIDs = Dictionary(uniqueKeysWithValues: records.map { ($0.id, Persona.defaultHumanID) })
+        let defaultApps = (try? SecondBrainDefaultApps.all()) ?? []
+        secondBrainApps = Dictionary(uniqueKeysWithValues: defaultApps.map { ($0.id, $0) })
+        seededDefaultAppIDs = Set(defaultApps.map(\.id))
     }
 
     public func create(_ thought: Thought) throws {
@@ -397,6 +402,46 @@ public final class MemoryThoughtRepository: ThoughtRepository, AuthoredThoughtRe
     public func fetchWeeklySummaries() throws -> [WeeklySummary] { lock.withLock { weeklySummaries.sorted { $0.weekStart > $1.weekStart } } }
     public func saveWeeklyPlan(_ plan: WeeklyPlan) throws { lock.withLock { weeklyPlans.removeAll { $0.targetWeekStart == plan.targetWeekStart }; weeklyPlans.append(plan) } }
     public func fetchWeeklyPlan(targetWeekStart: Date) throws -> WeeklyPlan? { lock.withLock { weeklyPlans.first { $0.targetWeekStart == targetWeekStart } } }
+
+    public func fetchAllApps() throws -> [SecondBrainApp] { lock.withLock { orderedApps() } }
+    public func fetchApp(id: UUID) throws -> SecondBrainApp? { lock.withLock { secondBrainApps[id] } }
+    public func createApp(_ app: SecondBrainApp) throws {
+        try lock.withLock {
+            guard secondBrainApps[app.id] == nil else { throw SecondBrainAppRepositoryError.duplicateID(app.id) }
+            secondBrainApps[app.id] = app
+        }
+    }
+    public func updateApp(_ app: SecondBrainApp) throws {
+        try lock.withLock {
+            guard let existing = secondBrainApps[app.id] else { throw SecondBrainAppRepositoryError.notFound(app.id) }
+            guard existing.createdAt == app.createdAt else { throw SecondBrainAppRepositoryError.createdAtChanged(app.id) }
+            secondBrainApps[app.id] = app
+        }
+    }
+    public func deleteApp(id: UUID) throws {
+        try lock.withLock {
+            guard secondBrainApps.removeValue(forKey: id) != nil else { throw SecondBrainAppRepositoryError.notFound(id) }
+        }
+    }
+    public func seedDefaultAppsIfNeeded(now: Date) throws -> Int {
+        try lock.withLock {
+            var inserted = 0
+            for app in try SecondBrainDefaultApps.all(createdAt: now) where !seededDefaultAppIDs.contains(app.id) {
+                if secondBrainApps[app.id] == nil { secondBrainApps[app.id] = app; inserted += 1 }
+                seededDefaultAppIDs.insert(app.id)
+            }
+            return inserted
+        }
+    }
+
+    private func orderedApps() -> [SecondBrainApp] {
+        secondBrainApps.values.sorted {
+            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+            let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+    }
 
     public func create(_ relation: ThoughtRelation) throws {
         try lock.withLock {

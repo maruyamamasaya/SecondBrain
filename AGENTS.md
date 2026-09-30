@@ -9,7 +9,7 @@
 
 ## Project Context
 
-- **Project Name:** プロダクト名は`SecondBrain`。リポジトリ／Xcode project名は`AiTextApp_iOS`、現在のアプリ表示名は`AiTextApp`、Core package名は`ThoughtCore`。
+- **Project Name:** プロダクト名は`SecondBrain`。リポジトリ／Xcode project名は`AiTextApp_iOS`、現在のアプリ表示名は`SecondBrain`、Core package名は`ThoughtCore`。
 - **Purpose:** Thoughtを中核として、人間とAI Personaの会話、振り返り、Knowledge、External Brain、個人用Apps / Toolsへの入口を統合するiPhone向け個人用AIワークスペース。Thoughtは140文字以内の短文を基本とする。
 - **Primary Stack:** Swift 5 language mode／Swift 6 package、SwiftUI、Combine、Foundation、SQLite、iOS 16以降、Xcode project + Swift Package。Firebase Apple SDKをapp targetで利用する。
 - **External Services / APIs:** GeminiはFirebase AI Logic + App Check、OpenAIは個人所有端末限定のResponses API直接接続、External Brain／KnowledgeはGitHub APIを利用する。OpenAI API keyとGitHub tokenはKeychainへ保存する。現時点で利用者アカウント、独自バックエンド、クラウド同期は持たない。Claude生成経路は未実装。

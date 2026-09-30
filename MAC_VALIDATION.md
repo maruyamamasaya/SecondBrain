@@ -233,3 +233,7 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] invalid token、repository not found、access denied、branch not found、network、rate limitを実通信またはURLProtocolで個別確認する。
 - [ ] Draft保存、Promote、sync、External Brain readが保存済みの同一Repository設定とKeychain tokenを利用する。
 - [ ] iPhone SE、Dynamic Type、Dark Mode、VoiceOverでSettingsの入力、Show／Hide、確認dialog、status、path表示を確認する。
+
+## 2026-09-30 最新main統合後の検証
+
+最新の結果は`sessions/2026-09-30-latest-sync-test-deploy.md`を正本とします。Swift Testing全155件、Toolsタブ／振り返り導線を含むUI検証、Vespera向け署名build・上書き導入・起動を確認しました。下記の過去時点の未実施記録とは区別してください。

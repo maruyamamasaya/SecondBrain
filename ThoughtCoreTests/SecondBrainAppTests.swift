@@ -40,6 +40,16 @@ struct SecondBrainAppTests {
         #expect(deepLink.launchTarget.storageValue == "github://notifications")
     }
 
+    @Test func launchPolicyRevalidatesAndShowsTheRealDestination() throws {
+        let web = try SecondBrainApp(name: "Web", kind: .web, launchTarget: .webURL("https://example.com/path#/detail"))
+        let local = try SecondBrainApp(name: "Local", kind: .localWeb, launchTarget: .localURL("http://192.168.1.10:8080"))
+        let native = try SecondBrainApp(name: "Knowledge", kind: .native, launchTarget: .nativeFeature(.knowledge))
+
+        #expect(try SecondBrainAppLaunchPolicy.prepare(web) == .externalURL(URL(string: "https://example.com/path#/detail")!, confirmation: "example.com"))
+        #expect(try SecondBrainAppLaunchPolicy.prepare(local) == .externalURL(URL(string: "http://192.168.1.10:8080")!, confirmation: "Local Web: 192.168.1.10:8080"))
+        #expect(try SecondBrainAppLaunchPolicy.prepare(native) == .native(.knowledge))
+    }
+
     @Test func defaultCatalogV2KeepsStudyAndAddsStudyApp() throws {
         let apps = try SecondBrainDefaultApps.all(createdAt: Date(timeIntervalSince1970: 100))
         #expect(SecondBrainDefaultApps.catalogVersion == 2)
@@ -67,7 +77,8 @@ struct SecondBrainAppTests {
             let defaults = try repository.fetchAllApps()
             #expect(defaults.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
 
-            let sharedMemo = try #require(repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID))
+            let fetchedSharedMemo = try repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)
+            let sharedMemo = try #require(fetchedSharedMemo)
             let edited = try SecondBrainApp(
                 id: sharedMemo.id,
                 name: "自分用メモ",
@@ -157,7 +168,8 @@ struct SecondBrainAppTests {
 
         do {
             let repository = try fixture.repository()
-            let study = try #require(repository.fetchApp(id: SecondBrainDefaultApps.studyID))
+            let fetchedStudy = try repository.fetchApp(id: SecondBrainDefaultApps.studyID)
+            let study = try #require(fetchedStudy)
             try repository.updateApp(SecondBrainApp(
                 id: study.id,
                 name: "編集済みStudy",
@@ -191,7 +203,8 @@ struct SecondBrainAppTests {
         do {
             let repository = try fixture.repository()
             try repository.create(thought)
-            let sharedMemo = try #require(repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID))
+            let fetchedSharedMemo = try repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)
+            let sharedMemo = try #require(fetchedSharedMemo)
             try repository.updateApp(SecondBrainApp(id: sharedMemo.id, name: "編集済みShared Memo", description: sharedMemo.description, icon: sharedMemo.icon, kind: sharedMemo.kind, launchTarget: .webURL("https://example.com/custom/#/"), category: sharedMemo.category, isFavorite: false, sortOrder: 11, createdAt: sharedMemo.createdAt, updatedAt: sharedMemo.updatedAt.addingTimeInterval(1)))
             #expect(SQLiteThoughtRepository.schemaVersion == 22)
         }
@@ -223,6 +236,36 @@ struct SecondBrainAppTests {
         #expect(try fixture.sqliteUserVersion() == 22)
         #expect(try migrated.fetchAll().contains(where: { $0.id == thought.id }))
         #expect(try migrated.fetchAllApps().map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
+    }
+
+    @Test func migratesSchemaV19ThroughWeeklyAndAppsSchemasWithoutChangingThoughts() throws {
+        let fixture = try AppFixture()
+        defer { fixture.remove() }
+        let thought = Thought(body: "v19から保持するThought", createdAt: Date(timeIntervalSince1970: 19))
+        do {
+            let repository = try fixture.repository()
+            try repository.create(thought)
+        }
+        try fixture.removeWeeklyAndAppsTablesAndMarkV19()
+
+        let migrated = try fixture.repository()
+        let interval = DateInterval(start: Date(timeIntervalSince1970: 100), end: Date(timeIntervalSince1970: 200))
+        let summary = WeeklySummary(
+            weekStart: interval.start,
+            weekEnd: interval.end,
+            content: .init(overview: "移行確認", themes: [], changes: [], recurringTopics: [], thoughtDevelopments: [], notableThoughts: [], unresolvedQuestions: []),
+            createdAt: Date(timeIntervalSince1970: 300),
+            provider: "openai",
+            model: "gpt-5.6-terra",
+            promptVersion: 1,
+            thoughtCount: 1
+        )
+        try migrated.saveWeeklySummary(summary)
+
+        #expect(try fixture.sqliteUserVersion() == 22)
+        #expect(try migrated.fetchAll().contains(where: { $0.id == thought.id }))
+        #expect(try migrated.fetchWeeklySummary(weekStart: interval.start) == summary)
+        #expect(try migrated.fetchAllApps().count == 5)
     }
 }
 
@@ -270,6 +313,18 @@ private struct AppFixture {
         }
         defer { sqlite3_close(database) }
         let sql = "DELETE FROM secondbrain_default_app_seed_history WHERE app_id = '\(SecondBrainDefaultApps.studyAppID.uuidString)'; DELETE FROM secondbrain_apps WHERE id = '\(SecondBrainDefaultApps.studyAppID.uuidString)'; UPDATE secondbrain_default_app_seed_history SET catalog_version = 1;"
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+            throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
+        }
+    }
+
+    func removeWeeklyAndAppsTablesAndMarkV19() throws {
+        var database: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+            throw SQLiteThoughtRepositoryError.open("test setup")
+        }
+        defer { sqlite3_close(database) }
+        let sql = "DROP TABLE secondbrain_default_app_seed_history; DROP TABLE secondbrain_apps; DROP TABLE weekly_plans; DROP TABLE weekly_summaries; PRAGMA user_version = 19;"
         guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
             throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
         }
