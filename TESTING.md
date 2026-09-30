@@ -14,7 +14,7 @@ swift test
 
 週間振り返りは月曜〜日曜の完了週境界、Human Thought限定、Terraの`weeklySummary`／medium／8,192 token、同週Summary置換、次週Plan候補の生成時非保存／明示確定、schema v20のSQLite round-tripを`WeeklyReviewTests.swift`で検証します。
 
-Apps / Tools Hubは`SecondBrainAppTests.swift`で空名、負の表示順、不正URL、WebのHTTP、非local host、危険scheme、kind／launch target不整合を拒否し、Local WebのHTTP、External Deep Linkを許可するDomain境界を検証します。SQLiteはschema v22のCRUD、固定UUID、表示順、お気に入り、Default Catalog v1の初回seed／再実行時の非重複、ユーザー編集の保持、削除後の非再生成、URL末尾slash／query／fragmentのround-trip、既存Thoughtを保持するv20→v22／v21→v22 migration、catalog version履歴を検証します。Preview fixtureはDefault CatalogとIDが重ならないことも確認します。Windowsでtest codeまで実装済みですが、Swift toolchainがないため未実行です。
+Apps / Tools Hubは`SecondBrainAppTests.swift`で空名、負の表示順、不正URL、WebのHTTP、非local host、危険scheme、kind／launch target不整合を拒否し、Local WebのHTTP、External Deep Linkを許可するDomain境界を検証します。SQLiteはschema v22のCRUD、固定UUID、表示順、お気に入り、Default Catalog v2の初回seed／再実行時の非重複、v1適用済みDBへのStudy Appだけの追加、ユーザー編集の保持、削除後の非再生成、URL末尾slash／query／fragmentのround-trip、既存Thoughtを保持するv20→v22／v21→v22 migration、catalog version履歴を検証します。Preview fixtureはDefault CatalogとIDが重ならないことも確認します。Windowsでtest codeまで実装済みですが、Swift toolchainがないため未実行です。
 
 Persona External Brain／External Brain Routing v1はAGENT.md解析、`{current_project}`展開、unsafe path拒否、Markdown front matter／heading chunk／draft除外、SHA差分同期・削除・offline cache、日本語自然文queryのtrigram検索、長いchunkの一致箇所周辺2,000文字excerpt、FTS route／metadata優先、最大件数、0件、AI Reply／Persona Post promptの参考資料境界とUsage metadataを`ExternalBrainTests.swift`で検証します。
 
@@ -30,9 +30,9 @@ AI API Usage Analyticsは`AIAPIUsageTests.swift`で現在のschema v22におけ�
 
 ## UI Test
 
-`AiTextAppUITests`はHome／Mentions／AI機能／Insights／Profileの5タブ、Home上部の本文検索とDetail遷移、Home Composerの投稿、メンションメニュのAI Persona選択による`@handle`本文挿入、Thought本文コピー操作、MentionsのMention／Replyセグメント分離とHome共通行表示、AI機能のペルソナ／使用状況／外部ブレイン入口、AIプロバイダー設定からGemini／OpenAI／Claude各詳細への入口、`@mio`の自動返信、Conversation表示、最新leafへの通常返信、Homeで返信2件目以降が初期非表示となることと全件表示への切替、Insightsのサマリー閲覧専用ページ・Daily Summary生成・Analytics入口、共通Profile表示、Profile右上から一般Settingsへの導線を検証します。Thoughtに紐づくタグ、Continuation、Daily Summaryなどの主要flowも維持します。
+`AiTextAppUITests`はHome／Mentions／AI機能／Tools／Profileの5タブ、Home右上から開く振り返り、Home上部の本文検索とDetail遷移、Home Composerの投稿、メンションメニュのAI Persona選択による`@handle`本文挿入、Thought本文コピー操作、MentionsのMention／Replyセグメント分離とHome共通行表示、AI機能のペルソナ／使用状況／外部ブレイン入口、AIプロバイダー設定からGemini／OpenAI／Claude各詳細への入口、`@mio`の自動返信、Conversation表示、最新leafへの通常返信、Homeで返信2件目以降が初期非表示となることと全件表示への切替、ToolsのDefault Catalogタイル、振り返りのサマリー閲覧専用ページ・Daily Summary生成・Analytics入口、共通Profile表示、Profile右上から一般Settingsへの導線を検証します。Thoughtに紐づくタグ、Continuation、Daily Summaryなどの主要flowも維持します。
 
-Theme UI testは4テーマを順に選択し、Home／Mentions／AI機能／Insights／ProfileとTab Barの各組み合わせをScreenshot attachmentへ保存します。最後に再起動して選択状態が維持されることを確認します。AI Thought固有Surfaceは共通`ThoughtRow`のactor kind分岐だけで適用し、本文自体へGlowを付けないことをコードレビュー対象とします。
+Theme UI testは4テーマを順に選択し、Home／Mentions／AI機能／Tools／ProfileとTab Barの各組み合わせをScreenshot attachmentへ保存します。最後に再起動して選択状態が維持されることを確認します。AI Thought固有Surfaceは共通`ThoughtRow`のactor kind分岐だけで適用し、本文自体へGlowを付けないことをコードレビュー対象とします。
 
 ローカル分析UIは「Timelineで1件投稿 → 分析を開く → 今日／7日／30日／活動日／活動日平均 → 日別カレンダーの今日が1件」をXCUITestで確認します。日別カレンダーの配置・濃淡・今日の枠線、locale曜日、時間帯、タグEmpty State、Continuation説明はSimulatorで目視とVoiceOver確認も行います。
 

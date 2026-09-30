@@ -168,12 +168,13 @@ public extension SecondBrainAppRepository {
 }
 
 public enum SecondBrainDefaultApps {
-    public static let catalogVersion = 1
+    public static let catalogVersion = 2
 
     public static let sharedMemoID = UUID(uuidString: "40000000-0000-4000-8000-000000000001")!
     public static let myWikiID = UUID(uuidString: "40000000-0000-4000-8000-000000000002")!
     public static let studyID = UUID(uuidString: "40000000-0000-4000-8000-000000000003")!
     public static let toolID = UUID(uuidString: "40000000-0000-4000-8000-000000000004")!
+    public static let studyAppID = UUID(uuidString: "40000000-0000-4000-8000-000000000005")!
 
     public static func all(createdAt: Date = Date()) throws -> [SecondBrainApp] {
         try [
@@ -211,6 +212,18 @@ public enum SecondBrainDefaultApps {
                 category: "学習",
                 isFavorite: false,
                 sortOrder: 30,
+                createdAt: createdAt
+            ),
+            SecondBrainApp(
+                id: studyAppID,
+                name: "Study App",
+                description: "学習用Webアプリ",
+                icon: "book.closed",
+                kind: .web,
+                launchTarget: .webURL("https://study-app-maruyama.maruyama-001.chatgpt.site/"),
+                category: "学習",
+                isFavorite: false,
+                sortOrder: 35,
                 createdAt: createdAt
             ),
             SecondBrainApp(

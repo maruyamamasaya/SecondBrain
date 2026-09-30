@@ -8,7 +8,7 @@ struct MainTabView: View {
     @State private var selection: Tab = .home
     @State private var navigationResetID = UUID()
 
-    private enum Tab: Hashable { case home, mentions, ai, insights, profile }
+    private enum Tab: Hashable { case home, mentions, ai, tools, profile }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -30,11 +30,11 @@ struct MainTabView: View {
                 .tag(Tab.ai)
                 .accessibilityIdentifier("aiFeaturesTab")
 
-            InsightsView(store: store)
+            ToolsView(store: store)
                 .id(navigationResetID)
-                .tabItem { Label("振り返り", systemImage: "sparkles") }
-                .tag(Tab.insights)
-                .accessibilityIdentifier("insightsTab")
+                .tabItem { Label("ツール", systemImage: "square.grid.3x3") }
+                .tag(Tab.tools)
+                .accessibilityIdentifier("toolsTab")
 
             ProfileTabView(store: store)
                 .id(navigationResetID)
@@ -153,6 +153,16 @@ struct TimelineView: View {
             )
             .onChange(of: searchQuery) { store.search($0) }
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        InsightsContentView(store: store)
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .accessibilityLabel("振り返り")
+                    .accessibilityHint("サマリー、日記、分析を開きます")
+                    .accessibilityIdentifier("homeInsightsButton")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         hidesLaterReplies.toggle()
@@ -622,7 +632,6 @@ private struct AIFeaturesView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-
             }
             .themedScrollableBackground()
             .themedScreen(.expressive)
@@ -970,56 +979,183 @@ private struct TimelineLoadMoreView: View {
     }
 }
 
-private struct InsightsView: View {
+private struct InsightsContentView: View {
     @ObservedObject var store: ThoughtStore
 
     var body: some View {
+        List {
+            Section("サマリー") {
+                NavigationLink {
+                    SummaryLibraryView(store: store)
+                } label: {
+                    Label("サマリーを見る", systemImage: "doc.text.magnifyingglass")
+                }
+                .accessibilityIdentifier("insightsSummaryLibraryButton")
+            }
+            Section("日記") {
+                NavigationLink {
+                    JournalCalendarView(store: store)
+                } label: {
+                    Label("日記を見る", systemImage: "book.closed")
+                }
+                .accessibilityIdentifier("insightsJournalButton")
+            }
+            Section("作成") {
+                NavigationLink {
+                    WeeklyReviewListView(store: store)
+                } label: {
+                    Label("週間振り返り", systemImage: "calendar.badge.clock")
+                }
+                .accessibilityIdentifier("insightsWeeklyReviewButton")
+                NavigationLink {
+                    DailySummaryCalendarView(store: store)
+                } label: {
+                    Label("デイリーサマリー", systemImage: "calendar.badge.checkmark")
+                }
+                .accessibilityIdentifier("insightsDailySummaryButton")
+            }
+            Section("分析") {
+                NavigationLink {
+                    ThoughtAnalyticsView(store: store)
+                } label: {
+                    Label("思考メモの分析", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .accessibilityIdentifier("insightsAnalyticsButton")
+            }
+        }
+        .themedScrollableBackground()
+        .themedScreen(.expressive)
+        .navigationTitle("振り返り")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ToolsView: View {
+    @ObservedObject var store: ThoughtStore
+    @Environment(\.openURL) private var openURL
+    @State private var launchError: String?
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+
+    var body: some View {
         NavigationStack {
-            List {
-                Section("サマリー") {
-                    NavigationLink {
-                        SummaryLibraryView(store: store)
-                    } label: {
-                        Label("サマリーを見る", systemImage: "doc.text.magnifyingglass")
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(store.secondBrainApps) { app in
+                        tile(for: app)
                     }
-                    .accessibilityIdentifier("insightsSummaryLibraryButton")
                 }
-                Section("日記") {
-                    NavigationLink {
-                        JournalCalendarView(store: store)
-                    } label: {
-                        Label("日記を見る", systemImage: "book.closed")
+                .padding(16)
+            }
+            .themedScreen(.expressive)
+            .navigationTitle("ツール")
+            .navigationBarTitleDisplayMode(.inline)
+            .overlay {
+                if store.secondBrainApps.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "square.grid.3x3")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("ツールはありません")
+                            .font(.headline)
+                        Text("利用できるApp / Toolが追加されると、ここに表示されます。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .accessibilityIdentifier("insightsJournalButton")
-                }
-                Section("作成") {
-                    NavigationLink {
-                        WeeklyReviewListView(store: store)
-                    } label: {
-                        Label("週間振り返り", systemImage: "calendar.badge.clock")
-                    }
-                    .accessibilityIdentifier("insightsWeeklyReviewButton")
-                    NavigationLink {
-                        DailySummaryCalendarView(store: store)
-                    } label: {
-                        Label("デイリーサマリー", systemImage: "calendar.badge.checkmark")
-                    }
-                    .accessibilityIdentifier("insightsDailySummaryButton")
-                }
-                Section("分析") {
-                    NavigationLink {
-                        ThoughtAnalyticsView(store: store)
-                    } label: {
-                        Label("思考メモの分析", systemImage: "chart.line.uptrend.xyaxis")
-                    }
-                    .accessibilityIdentifier("insightsAnalyticsButton")
+                    .padding(24)
                 }
             }
-            .themedScrollableBackground()
-            .themedScreen(.expressive)
-            .navigationTitle("振り返り")
-            .navigationBarTitleDisplayMode(.inline)
+            .alert("ツールを開けません", isPresented: launchErrorIsPresented) {
+                Button("OK") { launchError = nil }
+            } message: {
+                Text(launchError ?? "")
+            }
         }
+    }
+
+    @ViewBuilder
+    private func tile(for app: SecondBrainApp) -> some View {
+        switch app.launchTarget {
+        case .nativeFeature(let feature):
+            NavigationLink {
+                nativeDestination(feature)
+            } label: {
+                ToolTile(app: app)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("toolTile_\(app.id.uuidString)")
+        case .webURL(let value), .localURL(let value), .deepLink(let value):
+            Button {
+                launch(value, appName: app.name)
+            } label: {
+                ToolTile(app: app)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("toolTile_\(app.id.uuidString)")
+        }
+    }
+
+    @ViewBuilder
+    private func nativeDestination(_ feature: SecondBrainNativeFeature) -> some View {
+        switch feature {
+        case .ai:
+            AIFeaturesView(store: store)
+        case .knowledge:
+            KnowledgeManagementView(store: store)
+        case .insights:
+            InsightsContentView(store: store)
+        }
+    }
+
+    private func launch(_ value: String, appName: String) {
+        guard let url = URL(string: value) else {
+            launchError = "\(appName)の起動先URLが不正です。"
+            return
+        }
+        openURL(url) { accepted in
+            if !accepted {
+                launchError = "\(appName)を開けませんでした。"
+            }
+        }
+    }
+
+    private var launchErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { launchError != nil },
+            set: { if !$0 { launchError = nil } }
+        )
+    }
+}
+
+private struct ToolTile: View {
+    let app: SecondBrainApp
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: app.icon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            Text(app.name)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(app.name)
+        .accessibilityHint(app.description.isEmpty ? "開きます" : app.description)
     }
 }
 

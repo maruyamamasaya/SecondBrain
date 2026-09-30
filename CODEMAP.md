@@ -2,7 +2,7 @@
 
 機能から主要コードへ到達するための索引です。
 
-現行コードだけを対象とします。Apps / Tools HubのDomain／Persistence／Default Catalogは実装済みで、未実装のUI／起動処理は`NEXT_FEATURES.md`にあります。
+現行コードだけを対象とします。Apps / Tools HubはDomain／Persistence／Default Catalog／3列タイルUI／起動処理まで実装済みです。
 
 ## Application Entry / UI
 
@@ -11,14 +11,14 @@
 - `AiTextApp/App/ThoughtAnalyticsView.swift` — ローカル分析のサマリーと日別／曜日／時間帯／タグ／Continuation表示。
 - `AiTextApp/App/DailySummaryView.swift` — 生成済みサマリーの閲覧専用一覧／詳細、日本語表記の月カレンダー、日別件数／継続件数、構造化Summary、Human限定の送信前プレビュー、要約済み過去日の安全な再生成、その日のjournal Draft生成。独立した日本語表記の日記カレンダーと日別詳細では、同期済みGitHub日記のMarkdownを見出し・箇条書き・引用として読みやすく表示する。
 - `AiTextApp/App/WeeklyReviewView.swift` — 過去12完了週の一覧、週間サマリーの送信前確認／生成／再生成、保存内容表示、次週プラン候補の編集・確定UI。
-- `AiTextApp/App/TimelineView.swift` — `MainTabView`（Home／Mentions／AI機能／Insights／Profile）、各タブの独立`NavigationStack`、Home／Mentions末尾の追加読込、Home上部の本文検索、右上の返信2件目以降を畳む切替・投稿Composer・投稿者フィルター、Mention／Reply一覧、AI機能ハブ、サマリー閲覧／生成を分けた分析ハブ、投稿一覧を持たない共通Actor Profile、Profile右上から開く一般Settings、Thought Detail、History、Continuation Composer、削除UI。
+- `AiTextApp/App/TimelineView.swift` — `MainTabView`（Home／Mentions／AI機能／Tools／Profile）、各タブの独立`NavigationStack`、Home／Mentions末尾の追加読込、Home上部の本文検索、右上の振り返り・返信表示切替・投稿Composer・投稿者フィルター、Mention／Reply一覧、AI機能ハブ、Apps catalogの3列正方形タイルとURL／Native起動、サマリー閲覧／生成を分けた振り返り画面、投稿一覧を持たない共通Actor Profile、Profile右上から開く一般Settings、Thought Detail、History、Continuation Composer、削除UI。
 - `AiTextApp/App/TimelineView.swift`内`AIProviderSettingsView`／各Provider設定View — GeminiのFirebase設定検出、OpenAIの端末限定Keychain API key管理、Claude未対応表示と、色・文言を併用した設定状態一覧。
 - `AiTextApp/App/TimelineView.swift`内`ProfileEditorView`／`PersonaIcon` — デフォルト人間の表示名、写真選択・縮小、丸型アイコン表示。
 - `AiTextApp/App/TimelineView.swift`内`PersonaManagementView`／`AIPersonaEditorView` — 複数AI Personaの一覧、追加、編集、無効化。
 - `AiTextApp/App/TimelineView.swift`内`AIPersonaManagementView`／`ActorProfileView` — AI Persona一覧からプロフィールを開き、表示内容と設定を確認・編集する管理導線。AIプロフィールには外部ブレインのローカル準備状態、GET接続確認、成功時の緑ライトと最終確認日時を表示する。
 - `AiTextApp/App/TimelineView.swift`内`AIPostRequestView`／`AIPostPreviewView` — Settingsの独立画面で投稿者AIを選択して依頼を入力し、Persona External Brainのroute／source、最終payloadを確認して明示送信する導線。
 - `AiTextApp/App/TimelineView.swift`内`AIReplyRequestView`／`AIReplyPreviewView` — メンション付きThoughtへのAI返信依頼、対象と最終payload確認、明示送信、Detail返信表示。
-- `AiTextApp/App/ThoughtStore.swift` — Timeline投稿・50件単位の追加読込境界、本文検索／タグ／Review／History／Continuation UI stateとCoreの接続。
+- `AiTextApp/App/ThoughtStore.swift` — Timeline投稿・50件単位の追加読込境界、本文検索／タグ／Review／History／Continuation／Apps catalog UI stateとCoreの接続。
 - `AiTextApp/App/ShareSheet.swift` — Exportファイルを標準Share Sheetへ渡すbridge。
 - `AiTextApp/App/ExternalBackupManager.swift` — security-scoped bookmark、外部backup／RestoreのUI state。
 - `AiTextApp/App/FolderPicker.swift` — iOS標準Filesフォルダpicker bridge。
@@ -35,7 +35,7 @@ Search: `@main|TimelineView|ThoughtStore|confirmationDialog`
 
 ## Thought Domain
 
-- `ThoughtCore/SecondBrainApp.swift` — Apps / Tools共通model、Native／Web／Local Web／External種別、分離したlaunch target、URL／scheme／local host／sort order validation、Repository protocol、固定UUIDとversionを持つDefault Catalog v1、分離したPreview／test fixture。
+- `ThoughtCore/SecondBrainApp.swift` — Apps / Tools共通model、Native／Web／Local Web／External種別、分離したlaunch target、URL／scheme／local host／sort order validation、Repository protocol、固定UUIDとversionを持つDefault Catalog v2、分離したPreview／test fixture。
 
 - `ThoughtCore/Thought.swift` — 原文、Persona、AI Persona設定、AI投稿／AI返信preview・生成use case、typed Reply Contextと取得repository境界、メンションmodel。
 - `ThoughtCore/ThoughtDraft.swift` — 140文字、trim、validation。
@@ -72,7 +72,7 @@ Search: `ThoughtRepository|ThoughtRelationRepository|createContinuation|SQLiteTh
 
 ## Tests
 
-- `ThoughtCoreTests/SecondBrainAppTests.swift` — App validation、Default Catalog固定UUID／順序／お気に入り／Study fragment、missing-only seed／編集保持／削除後非再生成、URL query／fragment round-trip、SQLite CRUD、既存Thoughtを保持するschema v20→v22／v21→v22 migration。
+- `ThoughtCoreTests/SecondBrainAppTests.swift` — App validation、Default Catalog固定UUID／順序／お気に入り／Study fragment／Study App URL、v1→v2追加seed、missing-only seed／編集保持／削除後非再生成、URL query／fragment round-trip、SQLite CRUD、既存Thoughtを保持するschema v20→v22／v21→v22 migration。
 
 - `ThoughtCoreTests/ThoughtTimelineTests.swift` — 投稿境界、Unicode、SQL順序、50件単位のページングと同一日時cursor、削除、本文検索、タグ・v4 migration、再読込、Export、Review期間・順序・件数。
 - `ThoughtCoreTests/ExternalBrainTests.swift` — AGENT parser、path traversal、front matter、heading chunk、draft除外、SHA差分同期／削除／offline cache、Persona route、最大件数、0件、prompt境界。

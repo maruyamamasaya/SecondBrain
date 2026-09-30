@@ -226,7 +226,7 @@ final class ThoughtFlowUITests: XCTestCase {
         composer.typeText("分析対象Thought")
         app.buttons["postButton"].tap()
 
-        app.tabBars.buttons["振り返り"].tap()
+        app.buttons["homeInsightsButton"].tap()
         let analyticsButton = app.buttons["insightsAnalyticsButton"]
         XCTAssertTrue(analyticsButton.waitForExistence(timeout: 2))
         analyticsButton.tap()
@@ -272,7 +272,7 @@ final class ThoughtFlowUITests: XCTestCase {
     func testFiveTabsMentionsProfileAndSettingsNavigation() {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
-        for title in ["ホーム", "メンション", "AI機能", "振り返り", "プロフィール"] {
+        for title in ["ホーム", "メンション", "AI機能", "ツール", "プロフィール"] {
             XCTAssertTrue(tabBar.buttons[title].exists, "\(title)タブを表示する")
         }
 
@@ -311,7 +311,14 @@ final class ThoughtFlowUITests: XCTestCase {
         app.segmentedControls["mentionsKindPicker"].buttons["リプライ"].tap()
         XCTAssertTrue(app.staticTexts["リプライ確認"].waitForExistence(timeout: 2))
 
-        tabBar.buttons["振り返り"].tap()
+        tabBar.buttons["ツール"].tap()
+        XCTAssertTrue(app.navigationBars["ツール"].waitForExistence(timeout: 2))
+        for title in ["Shared Memo", "My Wiki", "Study", "Study App", "Tool"] {
+            XCTAssertTrue(app.buttons[title].exists, "\(title)タイルを表示する")
+        }
+
+        tabBar.buttons["ホーム"].tap()
+        app.buttons["homeInsightsButton"].tap()
         XCTAssertTrue(app.navigationBars["振り返り"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.buttons["insightsSummaryLibraryButton"].exists)
         XCTAssertTrue(app.buttons["insightsJournalButton"].exists)
@@ -369,7 +376,7 @@ final class ThoughtFlowUITests: XCTestCase {
             app.navigationBars["外観とテーマ"].buttons.element(boundBy: 0).tap()
             app.navigationBars["設定"].buttons["完了"].tap()
 
-            for tab in ["ホーム", "メンション", "AI機能", "振り返り", "プロフィール"] {
+            for tab in ["ホーム", "メンション", "AI機能", "ツール", "プロフィール"] {
                 tabBar.buttons[tab].tap()
                 XCTAssertTrue(tabBar.buttons[tab].isSelected)
                 add(XCTAttachment(screenshot: app.screenshot(), quality: .medium).named("Theme-\(theme)-\(tab)"))

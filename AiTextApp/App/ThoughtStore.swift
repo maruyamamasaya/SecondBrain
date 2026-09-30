@@ -100,6 +100,7 @@ final class ThoughtStore: ObservableObject {
     @Published private(set) var knowledgeDocuments: [KnowledgeDocument] = []
     @Published private(set) var knowledgeLifecycleEvents: [KnowledgeLifecycleEvent] = []
     @Published private(set) var knowledgeQualityCandidates: [KnowledgeQualityCandidate] = []
+    @Published private(set) var secondBrainApps: [SecondBrainApp] = []
     let externalBackupManager: ExternalBackupManager?
     let externalBrainManager: ExternalBrainManager
 
@@ -179,6 +180,11 @@ final class ThoughtStore: ObservableObject {
             humanReplyRepository = repository as? any HumanThoughtReplyRepository
             exporter = ThoughtExporter(repository: repository)
             thoughts = timeline.thoughts
+            if let appRepository = repository as? any SecondBrainAppRepository {
+                secondBrainApps = (try? appRepository.fetchAllApps()) ?? []
+            } else {
+                secondBrainApps = (try? SecondBrainDefaultApps.all()) ?? []
+            }
             if let personaRepository { defaultHumanPersona = try personaRepository.fetchDefaultHumanPersona() }
             if let personaRepository { personas = try personaRepository.fetchPersonas(includeInactive: false) }
             if let aiPersonaRepository { aiConfigurations = try aiPersonaRepository.fetchAIConfigurations() }

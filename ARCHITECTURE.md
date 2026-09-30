@@ -2,16 +2,18 @@
 
 SecondBrainの現行iOS実装では、HumanとAI Personaを`Persona`（公開上は`Actor` alias）という単一モデルで扱います。不変UUIDを参照キー、変更可能な一意`handle`を表示用IDとし、Mentionは本文とは別にActor ID、投稿時handle snapshot、UTF-16範囲を保存します。Replyは`thought_relations.repliesTo`、Continuationは`thought_relations.continues`で独立して表現します。
 
-この文書は将来構想ではなく、2026-09-28にコードと照合した実装済み構成を記録します。Apps / Tools HubはDomain／Persistence／Default Catalogまでを現在構成として扱い、未実装のUI／起動処理は`NEXT_FEATURES.md`へ分離します。
+この文書は将来構想ではなく、2026-09-30にコードと照合した実装済み構成を記録します。Apps / Tools HubはDomain／Persistence／Default Catalog／3列タイルUI／起動処理までを現在構成として扱い、未実装の編集UIは`NEXT_FEATURES.md`へ分離します。
 
 ## System Overview
 
 ```text
-SwiftUI App -> MainTabView -> Home / Mentions / AI機能 / 振り返り / Profile
+SwiftUI App -> MainTabView -> Home / Mentions / AI機能 / Tools / Profile
   Home (TimelineView) -> ThoughtDetailView / Continuation Composer
   MentionsView -> Mention・Reply一覧 -> ThoughtDetailView
   AI機能 -> Persona / Provider / Usage / External Brain / Knowledge
   振り返り -> Daily Summary / Weekly Review / Journal / Thought Analytics
+  Home -> 振り返り
+  Tools -> SecondBrainApp catalog -> Native route / openURL
   ProfileTabView -> ActorProfileView -> SettingsView
   SettingsView -> AIAPIUsageAnalyticsView -> LoadAIAPIUsageAnalytics
   -> ThoughtStore (presentation state)
@@ -40,12 +42,13 @@ SwiftUI App -> MainTabView -> Home / Mentions / AI機能 / 振り返り / Profil
 
 - `AppTheme` / `ThemeController` / `ThemeHost`: raw color・radius・durationのPrimitive、用途別Semantic、4種のTheme preset、画面強度とReduce Motionを解決するEffect境界を分離する。選択はUserDefaultsへ保存し、全5タブは同じView構造のままEnvironmentのresolved tokenを消費する。常駐Effectは少数のSwiftUI Shape、静的な決定論的star、transform／opacity中心の長周期animationに限定する。
 
-- `MainTabView`: 標準`TabView`で5つの主要導線を構成し、タブごとの`NavigationStack`とHomeのTimeline状態を保持する。
+- `MainTabView`: 標準`TabView`でHome／Mentions／AI機能／Tools／Profileの5つの主要導線を構成し、タブごとの`NavigationStack`とHomeのTimeline状態を保持する。振り返りはHome右上のNavigationLinkから開く。
 - 投稿成功Navigationは`ThoughtStore.PostNavigationRequest`へ集約する。Rootの`MainTabView`がHomeを選択して各タブのNavigation rootを再生成し、`TimelineView`が作成されたThoughtへスクロールして短時間ハイライトする。キャンセルや生成・保存失敗では成功イベントを発行せず、現在のSheetと入力を保持する。
 - `TimelineView`: Home専用。右上の鉛筆から開く投稿Composer、投稿者フィルター、Lazy Timeline、Detail、相対日時、操作メニュー、削除確認、Empty State、エラー表示。検索・振り返り・設定の重複Toolbar導線は持たない。
 - `MentionsView`: 保存済みMention relationと`repliesTo` relationから、Human／AI Persona宛ての受信項目を新しい順で表示する。
 - `SearchTabView`: 現在はThought本文検索を提供し、将来Persona／Tag／Knowledge検索を追加できる独立タブ境界。
-- `InsightsView`: Daily Summary Calendar、週間振り返り、Thought Analyticsをまとめ、将来の月次分析も追加できる分析ハブ。
+- `InsightsContentView`: Home右上から開き、Daily Summary Calendar、週間振り返り、Thought Analyticsをまとめる分析ハブ。
+- `ToolsView`: `SecondBrainAppRepository`から読み込んだcatalogを3列の正方形タイルで表示する。Nativeは閉じたfeature route、Web／Local Web／ExternalはSwiftUI `openURL`へ渡し、OSが受理しない場合は画面内Alertを表示する。
 - `WeeklyReviewListView`／`WeeklyReviewDetailView`: 完了した暦週（月曜〜日曜）を選び、Human Thought限定の週間サマリーを送信前確認後に生成する。次週プランは保存済みSummaryを入力に別AI callで候補生成し、編集・明示確定まで永続化しない。
 - `ActorProfileView`: Human／AI共通のプロフィール表示。自分のProfileタブでは編集とSettingsへのToolbar導線を追加する。AIではPersona別External Brain設定、Repository、Keychain token、同期済みAGENT cacheをローカル評価し、明示GET確認が成功した場合だけ接続済みの緑ライトを表示する。
 - `ThoughtAnalyticsView`: 直近30日の基本サマリー、日別／曜日別／時間帯別分布、上位タグ、Continuation件数を標準SwiftUIの縦Sectionと簡易バーで表示する完全ローカル画面。
@@ -136,4 +139,4 @@ AI Personaプロフィールの接続チェッカーはAI生成clientを呼ば�
 
 現行実装が外部通信するのは、Gemini用Firebase AI Logic / App Check、OpenAI Responses API、External Brain／Knowledge用GitHub APIです。Files／iCloud Driveはユーザーが選択した保存先へのBackup / Restoreに利用します。独自バックエンド、利用者アカウント、クラウド同期、Claude生成はまだ存在しません。
 
-Apps / Toolsは`SecondBrainApp`、Repository境界、schema v21の`secondbrain_apps`、schema v22のDefault Catalog適用履歴まで実装済みです。Default Catalog v1は固定UUIDのShared Memo／My Wiki／Study／Toolを新規・移行DBへmissing-onlyで登録します。同じIDの既存Appは変更せず履歴だけを記録し、適用済みAppの編集を上書きせず、削除後も再生成しません。catalog versionは将来追加される固定IDの判定材料として履歴へ保存します。Preview／test fixtureはDefault Catalogと分離しています。SwiftUI画面、Native route resolution、外部URLを実際に開くapp layer、到達確認、WebViewは未実装です。App間データ共有、AIによるApp操作、Context連携はv1の範囲外です。
+Apps / Toolsは`SecondBrainApp`、Repository境界、schema v21の`secondbrain_apps`、schema v22のDefault Catalog適用履歴、SwiftUIの3列タイル画面、Native route resolution、外部URLを開くapp layerまで実装済みです。Default Catalog v2は固定UUIDのShared Memo／My Wiki／Study／Study App／Toolを新規・移行DBへmissing-onlyで登録します。v1適用済みDBには新しいStudy Appだけを追加します。同じIDの既存Appは変更せず履歴だけを記録し、適用済みAppの編集を上書きせず、削除後も再生成しません。catalog versionは追加時点を履歴へ保存します。Preview／test fixtureはDefault Catalogと分離しています。Catalog編集UI、到達確認、WebViewは未実装です。App間データ共有、AIによるApp操作、Context連携はv1の範囲外です。

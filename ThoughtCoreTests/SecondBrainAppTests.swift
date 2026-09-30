@@ -40,18 +40,20 @@ struct SecondBrainAppTests {
         #expect(deepLink.launchTarget.storageValue == "github://notifications")
     }
 
-    @Test func defaultCatalogUsesStableIDsOrderFavoritesAndStudyFragment() throws {
+    @Test func defaultCatalogV2KeepsStudyAndAddsStudyApp() throws {
         let apps = try SecondBrainDefaultApps.all(createdAt: Date(timeIntervalSince1970: 100))
-        #expect(SecondBrainDefaultApps.catalogVersion == 1)
+        #expect(SecondBrainDefaultApps.catalogVersion == 2)
         #expect(SecondBrainDefaultApps.sharedMemoID.uuidString == "40000000-0000-4000-8000-000000000001")
         #expect(SecondBrainDefaultApps.myWikiID.uuidString == "40000000-0000-4000-8000-000000000002")
         #expect(SecondBrainDefaultApps.studyID.uuidString == "40000000-0000-4000-8000-000000000003")
         #expect(SecondBrainDefaultApps.toolID.uuidString == "40000000-0000-4000-8000-000000000004")
-        #expect(apps.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
-        #expect(apps.map(\.name) == ["Shared Memo", "My Wiki", "Study", "Tool"])
-        #expect(apps.map(\.sortOrder) == [10, 20, 30, 40])
-        #expect(apps.map(\.isFavorite) == [true, true, false, false])
+        #expect(SecondBrainDefaultApps.studyAppID.uuidString == "40000000-0000-4000-8000-000000000005")
+        #expect(apps.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
+        #expect(apps.map(\.name) == ["Shared Memo", "My Wiki", "Study", "Study App", "Tool"])
+        #expect(apps.map(\.sortOrder) == [10, 20, 30, 35, 40])
+        #expect(apps.map(\.isFavorite) == [true, true, false, false, false])
         #expect(apps[2].launchTarget.storageValue == "https://maruyamamasaya.github.io/study/#/")
+        #expect(apps[3].launchTarget.storageValue == "https://study-app-maruyama.maruyama-001.chatgpt.site/")
 
         let previewFixtures = try SecondBrainAppFixtures.samples()
         #expect(Set(previewFixtures.map(\.id)).isDisjoint(with: Set(apps.map(\.id))))
@@ -63,7 +65,7 @@ struct SecondBrainAppTests {
         do {
             let repository = try fixture.repository()
             let defaults = try repository.fetchAllApps()
-            #expect(defaults.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
+            #expect(defaults.map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
 
             let sharedMemo = try #require(repository.fetchApp(id: SecondBrainDefaultApps.sharedMemoID))
             let edited = try SecondBrainApp(
@@ -95,7 +97,7 @@ struct SecondBrainAppTests {
         #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.isFavorite == false)
         #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.sortOrder == 15)
         #expect(try reopened.fetchApp(id: SecondBrainDefaultApps.toolID) == nil)
-        #expect(try reopened.fetchAllApps().count == 3)
+        #expect(try reopened.fetchAllApps().count == 4)
     }
 
     @Test func sqliteCreatesUpdatesOrdersFavoritesAndDeletesApps() throws {
@@ -146,6 +148,39 @@ struct SecondBrainAppTests {
         }
 
         #expect(try repository.fetchApp(id: SecondBrainDefaultApps.studyID)?.launchTarget.storageValue == "https://maruyamamasaya.github.io/study/#/")
+        #expect(try repository.fetchApp(id: SecondBrainDefaultApps.studyAppID)?.launchTarget.storageValue == "https://study-app-maruyama.maruyama-001.chatgpt.site/")
+    }
+
+    @Test func catalogV2AddsOnlyStudyAppToExistingV1Database() throws {
+        let fixture = try AppFixture()
+        defer { fixture.remove() }
+
+        do {
+            let repository = try fixture.repository()
+            let study = try #require(repository.fetchApp(id: SecondBrainDefaultApps.studyID))
+            try repository.updateApp(SecondBrainApp(
+                id: study.id,
+                name: "編集済みStudy",
+                description: study.description,
+                icon: study.icon,
+                kind: study.kind,
+                launchTarget: study.launchTarget,
+                category: study.category,
+                isFavorite: study.isFavorite,
+                sortOrder: study.sortOrder,
+                createdAt: study.createdAt,
+                updatedAt: study.updatedAt.addingTimeInterval(1)
+            ))
+        }
+        try fixture.prepareCatalogV1()
+
+        let upgraded = try fixture.repository()
+        #expect(try upgraded.fetchAllApps().map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
+        #expect(try upgraded.fetchApp(id: SecondBrainDefaultApps.studyID)?.name == "編集済みStudy")
+        #expect(try upgraded.fetchApp(id: SecondBrainDefaultApps.myWikiID) != nil)
+        #expect(try upgraded.fetchApp(id: SecondBrainDefaultApps.studyAppID)?.launchTarget.storageValue == "https://study-app-maruyama.maruyama-001.chatgpt.site/")
+        #expect(try fixture.defaultSeedHistoryCount() == 5)
+        #expect(try fixture.defaultSeedCatalogVersions() == [1, 2])
     }
 
     @Test func migratesSchemaV21SeedsMissingDefaultsAndPreservesExistingRecords() throws {
@@ -165,12 +200,12 @@ struct SecondBrainAppTests {
         let migrated = try fixture.repository()
         #expect(try fixture.sqliteUserVersion() == 22)
         #expect(try migrated.fetchAll().map(\.id).contains(thought.id))
-        #expect(try migrated.fetchAllApps().count == 4)
+        #expect(try migrated.fetchAllApps().count == 5)
         #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.name == "編集済みShared Memo")
         #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.sharedMemoID)?.launchTarget.storageValue == "https://example.com/custom/#/")
         #expect(try migrated.fetchApp(id: SecondBrainDefaultApps.myWikiID) != nil)
-        #expect(try fixture.defaultSeedHistoryCount() == 4)
-        #expect(try fixture.defaultSeedCatalogVersions() == [1])
+        #expect(try fixture.defaultSeedHistoryCount() == 5)
+        #expect(try fixture.defaultSeedCatalogVersions() == [2])
         #expect(try fixture.tableColumns("secondbrain_apps").isSuperset(of: ["id", "name", "kind", "launch_target_type", "launch_target_value", "is_favorite", "sort_order"]))
     }
 
@@ -187,7 +222,7 @@ struct SecondBrainAppTests {
         let migrated = try fixture.repository()
         #expect(try fixture.sqliteUserVersion() == 22)
         #expect(try migrated.fetchAll().contains(where: { $0.id == thought.id }))
-        #expect(try migrated.fetchAllApps().map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.toolID])
+        #expect(try migrated.fetchAllApps().map(\.id) == [SecondBrainDefaultApps.sharedMemoID, SecondBrainDefaultApps.myWikiID, SecondBrainDefaultApps.studyID, SecondBrainDefaultApps.studyAppID, SecondBrainDefaultApps.toolID])
     }
 }
 
@@ -223,6 +258,18 @@ private struct AppFixture {
         }
         defer { sqlite3_close(database) }
         let sql = "DROP TABLE secondbrain_default_app_seed_history; DROP TABLE secondbrain_apps; PRAGMA user_version = 20;"
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+            throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
+        }
+    }
+
+    func prepareCatalogV1() throws {
+        var database: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK, let database else {
+            throw SQLiteThoughtRepositoryError.open("test setup")
+        }
+        defer { sqlite3_close(database) }
+        let sql = "DELETE FROM secondbrain_default_app_seed_history WHERE app_id = '\(SecondBrainDefaultApps.studyAppID.uuidString)'; DELETE FROM secondbrain_apps WHERE id = '\(SecondBrainDefaultApps.studyAppID.uuidString)'; UPDATE secondbrain_default_app_seed_history SET catalog_version = 1;"
         guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
             throw SQLiteThoughtRepositoryError.database(String(cString: sqlite3_errmsg(database)))
         }

@@ -35,7 +35,8 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] schema v20 DBをv22へmigrationし、既存Thought／Persona／Knowledge／Weekly Summaryが保持される
 - [ ] schema v21 DBをv22へmigrationし、既存App編集と既存Coreデータが保持される
 - [ ] 新規DBがschema v22で作成され、`secondbrain_apps`／`secondbrain_default_app_seed_history`のhealth checkと`PRAGMA integrity_check`が成功する
-- [ ] 新規DBへDefault Catalog v1のShared Memo／My Wiki／Study／Toolが固定UUID・指定順・指定favoriteで1回だけ登録される
+- [ ] 新規DBへDefault Catalog v2のShared Memo／My Wiki／Study／Study App／Toolが固定UUID・指定順・指定favoriteで1回だけ登録される
+- [ ] Default Catalog v1適用済みDBでは既存のStudy／My Wikiとユーザー編集を保持し、Study Appだけが追加される
 - [ ] seedを再実行してもDefault Appと履歴が重複しない
 - [ ] Default Appの名前／URL／お気に入り／表示順を編集後に再seed・再起動しても上書きされない
 - [ ] Default Appを削除後に再seed・再起動しても復活しない
@@ -49,6 +50,22 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 - [ ] Local Webを実機から同一LANで開き、offline／到達不能時の表示を確認する
 - [ ] SwiftUIをiPhone SE相当、最新標準iPhone、Dynamic Type、Dark Mode、VoiceOverで確認する
 - [ ] WebViewを将来導入した場合だけ、navigation、認証、外部遷移、cookie／storage、閉じる操作を別途確認する。v1 Domain／PersistenceではWebView未導入
+- [ ] XCTestDevicesの開始時一覧・容量、新規作成数、削除数、終了時容量を記録する
+
+## 2026-09-30追加分（Toolsタブ／振り返り導線）
+
+状態: **Windowsで実装済み／Swift compile未確認／UI Test未実施／Simulator未確認／実機デプロイ未実施**。Windowsから遠隔Macと5G接続中のVesperaとのXcode接続を確認できないため、デプロイ試行は行っていない。
+
+- [ ] Home／Mentions／AI機能／Tools／Profileの5タブがcompileできる
+- [ ] Home右上の振り返りボタンからサマリー／日記／週間振り返り／分析へ遷移できる
+- [ ] ToolsタブにDefault Catalog 4件がsortOrder順で3列の正方形タイルとして表示される
+- [ ] iPhone SE相当と最新標準iPhoneでタイルが切れず、Dynamic Type／Dark Mode／VoiceOverで利用できる
+- [ ] Web URLを開け、失敗時にはAlertが表示される
+- [ ] Native route、Local Web、External Deep Linkを各1件確認する
+- [ ] 更新した`AiTextAppUITests`を既存Simulator 1台・並列無効で実行する
+- [ ] Macから`xcrun devicectl list devices`でVesperaの接続状態を確認する
+- [ ] 接続可能な場合だけDebug実機buildを行い、既存アプリを削除せずVesperaへ上書き導入・起動する
+- [ ] Vesperaが5G越しで接続不可の場合はデプロイを保留し、同一Wi-FiまたはiPhone側拠点のMacから再実施する
 - [ ] XCTestDevicesの開始時一覧・容量、新規作成数、削除数、終了時容量を記録する
 
 ## 1. Swift Package Tests

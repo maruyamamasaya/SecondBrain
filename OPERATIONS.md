@@ -1,6 +1,6 @@
 # Operations
 
-この文書はSecondBrainの現行iOSアプリ`AiTextApp`の開発、外部サービス、データ保全を扱います。現在利用する外部APIはFirebase AI Logic / App Check、OpenAI Responses API、GitHub APIです。Apps / Tools Hubは未実装のため、外部Appの認証情報や運用はまだ管理しません。
+この文書はSecondBrainの現行iOSアプリ`AiTextApp`の開発、外部サービス、データ保全を扱います。現在利用する外部APIはFirebase AI Logic / App Check、OpenAI Responses API、GitHub APIです。Apps / Tools Hubはcatalogと起動UIまで実装済みですが、外部Appの認証情報は保存・管理しません。
 
 ## Local Development
 
@@ -42,6 +42,8 @@ Firebase Apple SDKはSwift Package Managerで12.17.0以降を指定し、app tar
 ## Deploy
 
 CI/CD、配布用bundle identifier、code signing、provisioning、TestFlight/App Store設定は未構成です。
+
+2026-09-30のToolsタブ／振り返り導線はWindowsで実装され、Swift compile、Xcode build、UI Test、Simulator確認、Vesperaへの実機デプロイは未実施です。Vesperaへの開発版導入は、署名情報を持つMacから端末が`devicectl`／XcodeのRun destinationとして接続可能であることを確認してから、既存アプリを削除せず上書きします。5G越しで端末を認識できない場合は試行せず、同一Wi-FiまたはiPhone側拠点のMacを使用します。
 
 ## Backup / Export
 

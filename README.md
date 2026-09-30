@@ -24,7 +24,7 @@ SecondBrain
    └─ External Services
 ```
 
-SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Tools HubはDomain、SQLite永続化、4件のDefault Catalog v1までWindowsで実装済みで、一覧UIと起動処理は未実装です。
+SecondBrain自体ですべてを再実装するのではなく、Native機能と外部のアプリ／サービスを共通の入口から扱える個人用インターフェースを目指します。Apps / Tools HubはDomain、SQLite永続化、5件のDefault Catalog v2、3列タイルUIと起動処理までWindowsで実装済みです。
 
 ## Thought
 
@@ -79,7 +79,7 @@ SQLite schemaはv22です。週間振り返り、日記表示修正、Apps / Too
 
 ## Apps / Tools
 
-SecondBrain内のNative機能、GitHub Pages、独立Webアプリ、ローカルネットワーク上のWebアプリ、外部サービスを共通の`App`として扱うDomain／Persistence基盤があります。Default Catalog v1にはShared Memo、My Wiki、Study、Toolを定義しています。残るUI／起動処理と未決定事項は[`NEXT_FEATURES.md`](NEXT_FEATURES.md)にまとめています。
+SecondBrain内のNative機能、GitHub Pages、独立Webアプリ、ローカルネットワーク上のWebアプリ、外部サービスを共通の`App`として扱うDomain／Persistence基盤があります。Default Catalog v2にはShared Memo、My Wiki、Study、Study App、Toolを定義しています。残る編集UIと未決定事項は[`NEXT_FEATURES.md`](NEXT_FEATURES.md)にまとめています。
 
 ## Development
 

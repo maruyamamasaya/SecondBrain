@@ -1,24 +1,24 @@
 # Current Project Status
 
-最終照合日: 2026-09-28
+最終照合日: 2026-09-30
 
 ## Project
 
-`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools HubはDomain、SQLite永続化、Default Catalog v1までWindowsで実装済みで、UIと起動処理は未実装です。
+`SecondBrain`は、Thoughtを中核にAI Persona、振り返り、Knowledge、External Brain、Apps / Toolsへの入口を統合する個人用AIワークスペースです。現行実装は`AiTextApp_iOS`リポジトリ内のSwiftUI製iPhoneアプリ`AiTextApp`と、Core package `ThoughtCore`です。Apps / Tools HubはDomain、SQLite永続化、Default Catalog v2に加えて、3列タイルUIと起動処理までWindowsで実装済みです。
 
 ## 現在のフェーズ
 
-Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v1までコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。週間振り返りv1と日記のDraft／active二重表示修正で発生した`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorは2026-09-18に修正し、Debug実機buildとVesperaへの上書き導入・起動を確認しました。Apps / Tools Hub追加分はWindows実装のため未compileです。
+Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps / Tools HubのDomain／Persistence／Default Catalog v2／3列タイルUIまでコード実装済みです。SQLite schemaはv22です。2026-09-13時点ではSwift Testing全140件とgeneric iOS Simulator向けDebug buildに成功しました。週間振り返りv1と日記のDraft／active二重表示修正で発生した`ThoughtCore/ExternalBrain.swift`のSwift 6.3型推論compile errorは2026-09-18に修正し、Debug実機buildとVesperaへの上書き導入・起動を確認しました。2026-09-30のToolsタブ／振り返り導線とDefault Catalog v2追加分はWindows実装のため未compile・未テスト・未デプロイです。
 
 ### 現在の検証状況
 
 - 週間振り返りv1と日記のDraft／active二重表示修正はWindowsで実装済み。日記cacheの型推論エラー修正後にDebug実機buildとVesperaでの起動を確認した。週間振り返りtest、schema v20 migration確認、日記重複表示test、Simulator UI確認は未完了であり、`MAC_VALIDATION.md`の「2026-09-14追加分」をMacで完了するまで、機能全体は「テスト済み」と扱わない。
 - 最新の検証手順と記録は`MAC_VALIDATION.md`、`sessions/2026-09-14-weekly-review-v1.md`、`sessions/2026-09-18-vespera-signing-build.md`を正本とする。
-- Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing未実施／Simulator未確認／実機未確認**。
+- Apps / Tools Hub v1: **Windowsで実装済み／Mac/Xcode compile未確認／Swift Testing・UI Test未実施／Simulator未確認／Vesperaへのデプロイ未実施**。
 
 ## 実装済み
 
-- Apps / Tools Hub v1のDomain／Persistence基盤。`SecondBrainApp`はUUID、名前、説明、icon、kind、launch target、category、お気に入り、表示順、作成・更新日時を持つ。Native／Web／Local Web／Externalと起動先を分離し、HTTPS、local HTTP、危険scheme、kindとの組み合わせをDomainで検証する。schema v21で独立`secondbrain_apps` tableを追加し、schema v22で`secondbrain_default_app_seed_history`を追加した。Default Catalog v1は固定UUIDのShared Memo／My Wiki／Study／Toolを不足時だけ登録する。既存項目を上書きせず、一度登録したDefault Appは削除後も履歴を残して再生成しない。Preview用fixtureとは分離し、Thought関連tableとは関係を持たない。UIとURL起動は未実装。
+- Apps / Tools Hub v1。`SecondBrainApp`はUUID、名前、説明、icon、kind、launch target、category、お気に入り、表示順、作成・更新日時を持つ。Native／Web／Local Web／Externalと起動先を分離し、HTTPS、local HTTP、危険scheme、kindとの組み合わせをDomainで検証する。schema v21で独立`secondbrain_apps` tableを追加し、schema v22で`secondbrain_default_app_seed_history`を追加した。Default Catalog v2は固定UUIDのShared Memo／My Wiki／Study／Study App／Toolを不足時だけ登録する。v1適用済みDBには`https://study-app-maruyama.maruyama-001.chatgpt.site/`を開くStudy Appだけを追加し、既存のStudyとMy Wikiを含む既存項目は上書きしない。一度登録したDefault Appは削除後も履歴を残して再生成しない。下部の「ツール」タブはcatalogを3列の正方形タイルで表示し、Web／Local Web／Externalは検証済みURL、Nativeは対応画面を開く。Preview用fixtureとは分離し、Thought関連tableとは関係を持たない。
 
 - 日記カレンダーはPromote後もGitHubに保持される元Draftと正式版を二重表示せず、日付・title・本文が一致する`active`日記を優先する。別内容の未正式化Draftは引き続き表示し、GitHub上のファイルやKnowledge Review履歴は変更しない。
 
@@ -35,11 +35,11 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 - `continues`／`repliesTo`を統合する`LoadConversationThread`を追加し、root、nodes、edges、currentPath、leaves、最新leafをDBから再構築する。Thought DetailはConversation表示へ移行し、通常返信は選択Thoughtではなく最新leafへ、過去地点への返信は`…`内の「この投稿から返信を分岐」へ分離した。会話Primary Actionとタグ／Knowledge Draft／削除などの管理操作も分離した。
 
 - AI Persona追加を妨げていた旧`personas.account_id`単独UNIQUE制約をschema v18で非破壊補修する。旧実機DBはPersona tableをtransaction内で再構築し、Humanの`account_id`へ既存／新規AIを所属させる。Thought author、Mention、AI ConfigurationなどのPersona ID参照を維持し、handleの大文字小文字を無視した一意性は継続する。
-- ユーザー向け表示の日本語化。Home／Mentions／AI機能／Insights／Profileの5タブ、各画面タイトル、テーマ、AI使用状況、GitHub接続、外部ブレイン、ナレッジ下書きの主な表示を日本語に統一した。開発ドキュメントも日本語を基本とする。
+- ユーザー向け表示の日本語化。Home／Mentions／AI機能／Tools／Profileの5タブ、Home内の振り返り、各画面タイトル、テーマ、AI使用状況、GitHub接続、外部ブレイン、ナレッジ下書きの主な表示を日本語に統一した。開発ドキュメントも日本語を基本とする。
 - 投稿後Navigation統一。AI機能タブの「AI返信の確認クッション」を任意でONにでき、初期値はOFF、選択は端末へ永続化する。OFFでは手動AI返信も生成からatomic投稿まで連続実行し、ONでは生成内容を確認してから投稿する。@メンションによるPersona AIの自動返信には承認を挟まない。生成・保存失敗時は画面と再試行導線を保持する。通常投稿、Human Reply、Continuation、AI Reply、Persona Postの成功は共通イベントでHome rootへ戻り、新規Thoughtを一時ハイライトする。
 - AI Persona管理とPersona Post依頼を分離。AI Personas一覧は各AIのプロフィール／編集へのリンクを中心とし、投稿操作はAI機能タブの独立した「AIに投稿を依頼」画面でPersonaを選択して依頼文を入力し、既存の送信前Previewへ進む。
 
-- UI演出プリセットとしてのTheme v1。Default／Dynamic Aurora／Pulse Neon／Blue Cosmosを`Primitive → Semantic → Theme → Effect`で解決し、Home／Mentionsは静かな強度、AI機能／Insights／Profileは強めの強度で同じ画面構造へ適用する。Profile > Settings > Appearance / Themeでライブプレビュー付き選択を行い、UserDefaultsへ永続化する。AI Thoughtは本文を発光させず専用Edge／Glowだけを加え、Reduce Motion時はambient animationを停止する。
+- UI演出プリセットとしてのTheme v1。Default／Dynamic Aurora／Pulse Neon／Blue Cosmosを`Primitive → Semantic → Theme → Effect`で解決し、Home／Mentionsは静かな強度、AI機能／Tools／Profileと振り返りは強めの強度で同じ画面構造へ適用する。Profile > Settings > Appearance / Themeでライブプレビュー付き選択を行い、UserDefaultsへ永続化する。AI Thoughtは本文を発光させず専用Edge／Glowだけを加え、Reduce Motion時はambient animationを停止する。
 
 - @ID／Mention／Reply v1。HumanとAI Personaを不変UUIDの共通Actorとして扱い、3〜30文字の一意な小文字handleを設定できる。Composerの`@`候補はHuman／AIを表示し、保存時にActor ID・handle snapshot・UTF-16範囲をschema v16のRelationへ保存する。既存`repliesTo` chain、返信先preview、Actor Profileをhandle表示へ接続し、handle変更後もRelationを維持する。
 
@@ -53,7 +53,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 - Persona External Brain v1。単一GitHub RepositoryとPersona別AGENT.md／Retrieval Routeを使い、MarkdownをApplication SupportへSHA差分同期してheading単位のSQLite FTS5 indexから最大5チャンクを取得する。AI Reply送信前Previewで資料と最終payloadを確認できる。GitHubはread-only、tokenはKeychain保存で、障害時はcacheまたはExternal Brainなしで返信を継続する。
 - 外部ブレイン接続済みPersonaの識別表示。GitHub接続確認に成功し、PersonaのAGENT.mdも同期済みのAIだけ、プロフィール・AI Persona一覧・Timeline・選択UIの名前横へメダル型バッジを表示する。設定済みだけ、未確認、同期待ち、接続失敗では表示しない。
 
-- `TabView`によるHome／Mentions／AI機能／Insights／Profileの5タブ。各タブは独立した`NavigationStack`を持つ。Home上部の検索欄で本文検索し、右上の鉛筆から投稿Composerを開き、隣のフィルターから投稿者単位でTimelineを絞り込む。MentionsはHuman／AI Persona宛てのMentionとReplyをセグメントで分け、Homeと同じThought行デザインで表示する。AI機能はAI投稿依頼、AIペルソナ設定、AI使用状況、生成設定、OpenAI API key、外部ブレイン、ナレッジ下書きを集約する。InsightsはDaily Summary／Analytics、Profileは投稿一覧を持たない共通Actor Profile UIを表示し、一般設定はProfile右上へ置く。
+- `TabView`によるHome／Mentions／AI機能／Tools／Profileの5タブ。各タブは独立した`NavigationStack`を持つ。Home上部の検索欄で本文検索し、右上から振り返り、投稿Composer、投稿者フィルター、返信表示切替を開く。MentionsはHuman／AI Persona宛てのMentionとReplyをセグメントで分け、Homeと同じThought行デザインで表示する。AI機能はAI投稿依頼、AIペルソナ設定、AI使用状況、生成設定、OpenAI API key、外部ブレイン、ナレッジ下書きを集約する。振り返りはHome右上からDaily Summary／Analyticsなどへ進む。ToolsはApps catalogを3列タイルで表示し、Profileは投稿一覧を持たない共通Actor Profile UIを表示して一般設定を右上へ置く。
 - ローカルの単一人間Persona基盤。SQLite schema v6の`personas`／`thought_authors`で既存・新規Thoughtを固定のデフォルト人間へ紐づけ、表示名と512px以下へ正方形化したJPEGアイコンをSQLite内へ保存する。
 - Timelineの投稿者名・丸型アイコン表示と、写真選択／削除／表示名編集を行うプロフィール画面。未設定時は標準人物アイコンを表示し、プロフィール変更を既存Thoughtへ一括反映する。
 - 複数AI Personaの作成・編集・無効化UIと、投稿ごとの実Persona表示。任意Persona IDでThoughtを原子的に保存でき、通信はユーザーの明示操作時だけ行う。
@@ -126,7 +126,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 ## 未実装
 
 - Release用App Attest providerのFirebase Console登録と実機通信。Debug Providerは実機で実通信とSQLite保存を確認済み。
-- Apps / Tools Hubの一覧／追加／編集UI、Native route解決、URL／Local Web／Deep Link起動。WebViewは未導入。
+- Apps / Tools Hubの追加／編集／削除UI、起動前host確認、Local Web到達確認。3列一覧、Native route、URL／Local Web／Deep Link起動は実装済みだがMac未検証。WebViewは未導入。
 - AI側の活動だけを対象にした独立AI Summary、Monthly Review。
 - 利用者アカウント、独自バックエンド、クラウド同期、複数端末同期、Claude生成経路。
 - CI/CD、配布用の署名・bundle identifier設定。
@@ -144,7 +144,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 
 - Swift 6.3で`ThoughtCore/ExternalBrain.swift`の`compactMap`要素型を推論できず、最新の`swift test`とDebug Simulator buildがcompileで停止する。
 - schema v20の新規DB round-trip testは存在するが、明示的なschema v19 fixtureからv20へのmigration testが未追加。
-- Apps / Tools HubのDomain、SQLite CRUD、Default Catalogのmissing-only seed、削除後の非再生成、URL保持、schema v20→v22／v21→v22 migration testは追加済みだが、Windows環境のため未実行。
+- Apps / Tools HubのDomain、SQLite CRUD、Default Catalog、3列タイルUI、Home右上の振り返り導線と対応テストコードは追加済みだが、Windows環境のためSwift compile、Swift Testing、Xcode build、UI Test、Simulator目視確認、Vesperaへのデプロイは未実施。
 - 週間振り返りと日記の最新修正はSimulatorでの画面確認が未完了。
 - Daily Summary統一後を含む最新XCUITest、Light／Dark Mode、Dynamic Type、VoiceOverの回帰確認が必要。
 - 破損した移行元JSONは自動復旧せず、SQLiteへの移行を中止してエラー表示し、原本を保持します。
@@ -154,7 +154,7 @@ Thought、AI Persona、Daily／Weekly Review、Knowledge、External Brain、Apps
 1. Swift 6.3 compile blockerを局所修正し、`swift test`とDebug Simulator buildを回復する。
 2. schema v19→v20 migration testを追加し、追加済みのv20→v22／v21→v22 migration testと合わせて実行する。
 3. `MAC_VALIDATION.md`の残項目を実施し、最新baselineを確定する。
-4. Apps / Tools一覧／編集の最小SwiftUIと、起動前確認を持つapp layerのlaunch policyをMacで実装・検証する。
+4. Apps / Toolsの3列タイルUI、Home右上の振り返り導線、各launch targetをMacでcompile・UI Test・Simulator目視確認し、その後Vesperaへ上書きデプロイする。
 5. Release App Attestを実機確認する。配布を検討する場合はOpenAI直接接続の廃止を先に行う。
 
 次期候補の比較、Apps / Tools Hub v1のscope、security checklist、設計開始条件は`NEXT_FEATURES.md`を参照する。
