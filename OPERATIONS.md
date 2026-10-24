@@ -4,11 +4,13 @@
 
 ## Local Development
 
-`AiTextApp.xcodeproj`をFirebase AI Logicが要求するXcode 26.2以降で開き、`AiTextApp` schemeと任意のiPhone Simulatorを選んで実行します。iOS 16.0以降が対象です。通常起動はFirebaseクライアントを使い、Firebase未設定時は外部送信せず設定エラーを表示します。UIテストはMemory repositoryとMock AIクライアントを使います。
+`AiTextApp.xcodeproj`をFirebase AI Logicが要求するXcode 26.2以降で開き、`AiTextApp` schemeと既存のiPhone 17e Simulator（iOS 26.5、UDID `EB3A49ED-6553-4D7E-B933-387951643EAB`）を選んで実行します。iOS 16.0以降が対象です。通常起動はFirebaseクライアントを使い、Firebase未設定時は外部送信せず設定エラーを表示します。UIテストはMemory repositoryとMock AIクライアントを使います。
+
+CLIのビルド・起動・テストでも上記UDIDを明示します。具体的なコマンドは`TESTING.md`、並列テストの無効化とデータ保護は`AGENTS.md`に従います。指定端末がない場合や互換性に問題がある場合は、代替端末を作らず理由と必要な対応を報告します。別のSimulator作成、OSランタイムの追加・更新は自動で行いません。実機確認は接続されているiPhone 12 mini・iPhone 13・iPhone 17eを利用します。
 
 ## Local Data
 
-初回起動時にApplication Support内の`ThoughtTimeline/thought-timeline.sqlite3`と親ディレクトリを自動作成します。同じ場所に旧`thoughts.json`があれば一度だけ取り込み、成功後もバックアップとして残します。データをリセットするにはSimulatorからアプリを削除してください。
+初回起動時にApplication Support内の`ThoughtTimeline/thought-timeline.sqlite3`と親ディレクトリを自動作成します。同じ場所に旧`thoughts.json`があれば一度だけ取り込み、成功後もバックアップとして残します。既存Simulator内のアプリやテストデータは、ユーザーの明示的な依頼なく初期化・削除しません。
 
 ## Build / Test
 

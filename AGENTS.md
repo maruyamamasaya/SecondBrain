@@ -84,6 +84,16 @@ git grep "error message"
 - 将来の担当者が理由を推測できない重要判断だけ `decisions/` に記録する。
 - 認証情報、署名情報、トークン、個人情報を文書やコミットへ含めない。
 
+## このMacのiOS開発端末方針
+
+- Simulatorは既存の **iPhone 17e／iOS 26.5／UDID `EB3A49ED-6553-4D7E-B933-387951643EAB`** に統一する。
+- Simulator向けのビルド・起動・テストではUDIDを明示し、既存端末を再利用する。`xcodebuild`は`-destination 'platform=iOS Simulator,id=EB3A49ED-6553-4D7E-B933-387951643EAB'`を指定し、`simctl`も`booted`ではなくこのUDIDを指定する。Xcode GUIでも同じ端末を選択する。
+- テストでは`-parallel-testing-enabled NO -maximum-parallel-testing-workers 1 -maximum-concurrent-test-simulator-destinations 1`を指定し、並列テストによる端末の複製を避ける。
+- 別のSimulator端末の作成やOSランタイムの追加・更新は自動で行わない。指定端末が見つからない場合やXcode・プロジェクトとの互換性に問題がある場合は、代替端末を作成・選択せず、理由と必要な対応を報告する。
+- 実機確認が必要な場合は、接続されているiPhone 12 mini・iPhone 13・iPhone 17eを利用する。接続状況と実機の識別子を確認して対象を指定する。
+- 既存Simulator内のアプリやテストデータは、ユーザーの明示的な依頼なく初期化・削除しない。`simctl erase`、アプリのuninstall、データコンテナ削除などによるリセットも行わない。
+- 以下のストレージ管理規定も引き続き適用する。タスクで新規作成された`XCTestDevices`のUUIDフォルダの後片付けと、既存Simulator内のデータ保護を区別する。
+
 ## Xcodeのストレージ管理
 
 iOS／macOSプロジェクトの検証では、Macのストレージ消費を最小限にします。

@@ -6,7 +6,7 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 
 - [ ] macOS／Xcode／Swiftのversionと実施日を記録する
 - [ ] `xcode-select -p`と`swift --version`を確認する
-- [ ] `xcrun simctl list devices available`でiPhone SE (3rd generation)と最新標準iPhoneの利用可否を確認する
+- [ ] `xcrun simctl list devices available`で指定iPhone 17e（iOS 26.5、UDID `EB3A49ED-6553-4D7E-B933-387951643EAB`）の利用可否を確認する。未検出・互換性問題時は代替端末を作らず報告する
 - [ ] `GoogleService-Info.plist`、署名Team、Firebase Console設定、GitHub tokenをGitへ追加せずローカルに用意する
 - [ ] `git status --short`で検証開始前の差分を記録する
 
@@ -91,9 +91,8 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 
 - [ ] `AiTextApp.xcodeproj`とshared `AiTextApp` schemeを読み込める
 - [ ] Firebase Apple SDK 12.18.0（FirebaseCore／FirebaseAILogic／FirebaseAppCheck）がresolveされる
-- [ ] iPhone SE (3rd generation) SimulatorのDebug buildが成功する
-- [ ] iPhone SE (3rd generation) SimulatorのRelease buildが成功する
-- [ ] 最新標準iPhone SimulatorのDebug buildが成功する
+- [ ] 指定iPhone 17e SimulatorのDebug buildが成功する
+- [ ] 指定iPhone 17e SimulatorのRelease buildが成功する
 - [ ] Swift 6 package／Swift 5 app targetでwarningとconcurrency errorが増えていない
 
 ## 3. SQLite Migration
@@ -186,7 +185,7 @@ Windowsで実装済みだが、macOS／Swift／Xcode環境で未検証の項目�
 
 ## 10. UI Regression
 
-- [ ] `AiTextAppUITests`をiPhone SE (3rd generation)と最新標準iPhone Simulatorで実行する
+- [ ] `AiTextAppUITests`を指定iPhone 17e SimulatorでUDIDを明示し、`TESTING.md`の並列無効・worker 1・同時destination 1で実行する
 - [ ] Timeline投稿／削除／検索／タグ／Detail／Continuation／Historyの主要flowを確認する
 - [ ] Daily Summary、AI Reply、External Brain preview、AI Usage Dashboard、ローカル分析の主要flowを確認する
 - [ ] 小型iPhoneでkeyboard、sheet、長いpayload、カレンダー、分析バーが崩れない

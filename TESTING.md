@@ -4,6 +4,12 @@
 
 UI非依存のドメイン／永続化／ExportはSwift PackageとしてLinux/macOS共通で検証します。SwiftUI appとXCUITestはmacOS/XcodeのSimulatorで検証します。
 
+## このMacの端末指定
+
+Simulatorは既存のiPhone 17e（iOS 26.5、UDID `EB3A49ED-6553-4D7E-B933-387951643EAB`）だけを再利用します。実行前に`xcrun simctl list devices available`でUDID・端末名・OSを確認し、見つからない場合や互換性に問題がある場合は理由と必要な対応を報告します。代替端末の作成・選択やOSランタイムの追加・更新は自動で行いません。起動時の`simctl`にもこのUDIDを明示します。
+
+既存アプリ・テストデータの初期化・削除にはユーザーの明示的な依頼が必要です。テスト前後の`XCTestDevices`一覧・容量記録、安全な後片付け、作成・削除数の報告は`AGENTS.md`のストレージ管理規定に従います。実機確認には接続済みのiPhone 12 mini・iPhone 13・iPhone 17eを利用します。
+
 ## Unit / Persistence Test
 
 ```bash
@@ -38,7 +44,9 @@ Theme UI testは4テーマを順に選択し、Home／Mentions／AI機能／Tool
 
 ```bash
 xcodebuild -project AiTextApp.xcodeproj -scheme AiTextApp \
-  -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' test
+  -destination 'platform=iOS Simulator,id=EB3A49ED-6553-4D7E-B933-387951643EAB' \
+  -parallel-testing-enabled NO -maximum-parallel-testing-workers 1 \
+  -maximum-concurrent-test-simulator-destinations 1 test
 ```
 
 キーボード表示、140文字、複数件、Dynamic Type、Light/Dark mode、VoiceOver label、Share Sheet保存先に加え、メンション付きThoughtのAI返信プレビュー／送信／生成中disable／Detail返信表示、AI要約の送信確認／loading／失敗／再試行／Mock表示／再要約、Files／iCloud Drive picker、Restore後の再起動をSimulator／実機で手動確認します。
@@ -49,10 +57,10 @@ Knowledge DraftはAI Reply／Persona Post／Daily Summaryの各導線、type選�
 
 ```bash
 xcodebuild -project AiTextApp.xcodeproj -scheme AiTextApp \
-  -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' build
+  -destination 'platform=iOS Simulator,id=EB3A49ED-6553-4D7E-B933-387951643EAB' build
 ```
 
-最新標準iPhone名は`xcrun simctl list devices available`で確認してdestinationへ指定します。
+ビルドだけで確認できる変更ではテストを実行しません。テスト時は上記の並列無効・worker 1・同時destination 1を維持し、端末の複製を避けます。
 
 ## Firebase Integration / Device
 
